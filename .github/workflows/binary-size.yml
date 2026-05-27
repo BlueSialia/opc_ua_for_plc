@@ -9,7 +9,7 @@ jobs:
     name: Check binary size
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -18,7 +18,8 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: baseline.json
-          key: binary-baseline-main
+          key: binary-baseline-${{ github.run_id }}
+          restore-keys: binary-baseline-
 
       - uses: Swatinem/rust-cache@v2
 
