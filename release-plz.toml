@@ -3,10 +3,9 @@
 
 [workspace]
 changelog_update = true
-git_release = true
+git_release_enable = true
 git_release_type = "prod"
 git_tag_enable = true
-github_release = true
 pr_draft = false
 allow_dirty = false
 repo_url = "https://github.com/BlueSialia/opc_ua_for_plc"

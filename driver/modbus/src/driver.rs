@@ -931,33 +931,27 @@ impl ProtocolDriver for ModbusDriver {
             }
 
             match m.data_type {
-                TagDataType::Float | TagDataType::Int32 | TagDataType::UInt32 => {
-                    if m.quantity < 2 {
-                        return Err(Box::new(DriverError::mapping(format!(
-                            "Mapping '{}' data_type requires quantity >= 2",
-                            m.tag_id
-                        ))));
-                    }
+                TagDataType::Float | TagDataType::Int32 | TagDataType::UInt32 if m.quantity < 2 => {
+                    return Err(Box::new(DriverError::mapping(format!(
+                        "Mapping '{}' data_type requires quantity >= 2",
+                        m.tag_id
+                    ))));
                 }
-                TagDataType::Double => {
-                    if m.quantity < 4 {
-                        return Err(Box::new(DriverError::mapping(format!(
-                            "Mapping '{}' data_type 'Double' requires quantity >= 4",
-                            m.tag_id
-                        ))));
-                    }
+                TagDataType::Double if m.quantity < 4 => {
+                    return Err(Box::new(DriverError::mapping(format!(
+                        "Mapping '{}' data_type 'Double' requires quantity >= 4",
+                        m.tag_id
+                    ))));
                 }
                 _ => {}
             }
 
             match m.function {
-                ModbusFunction::InputRegisters | ModbusFunction::DiscreteInputs => {
-                    if m.writable {
-                        return Err(Box::new(DriverError::mapping(format!(
-                            "Mapping '{}' marked writable but uses read-only function {:?}",
-                            m.tag_id, m.function
-                        ))));
-                    }
+                ModbusFunction::InputRegisters | ModbusFunction::DiscreteInputs if m.writable => {
+                    return Err(Box::new(DriverError::mapping(format!(
+                        "Mapping '{}' marked writable but uses read-only function {:?}",
+                        m.tag_id, m.function
+                    ))));
                 }
                 _ => {}
             }

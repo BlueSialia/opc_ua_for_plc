@@ -33,11 +33,7 @@ serde_json = "1.0"
 thiserror = "2.0"
 tracing = "0.1"
 async-trait = "0.1"
-bytes = "1"
 byteorder = "1"
-
-# Optional: futures utilities
-futures = "0.3"
 
 [features]
 default = ["native"]

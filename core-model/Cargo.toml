@@ -32,9 +32,7 @@ tracing = "0.1"
 # Use system time types from std; chrono only for convenience serializing if needed.
 chrono = { version = "0.4", features = ["serde"] }
 
-[dev-dependencies]
-# Tokio is needed for unit/integration tests that use #[tokio::test]
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+
 
 [features]
 # Minimal default feature set. Consumers (runtime/opcua/drivers) can enable serde for persistence or config export.
