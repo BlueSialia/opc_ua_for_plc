@@ -120,22 +120,18 @@ pub fn tagconfig_to_fins_mapping(t: &TagConfig) -> Result<driver_fins::TagMappin
 
     // Validate word_count compatibility against the declared data type
     match dt {
-        TagDataType::Float | TagDataType::Int32 | TagDataType::UInt32 => {
-            if word_count < 2 {
-                return Err(anyhow!(
-                    "Incompatible word_count {} for data_type '{}' (needs >=2)",
-                    word_count,
-                    t.data_type
-                ));
-            }
+        TagDataType::Float | TagDataType::Int32 | TagDataType::UInt32 if word_count < 2 => {
+            return Err(anyhow!(
+                "Incompatible word_count {} for data_type '{}' (needs >=2)",
+                word_count,
+                t.data_type
+            ));
         }
-        TagDataType::Double => {
-            if word_count < 4 {
-                return Err(anyhow!(
-                    "Incompatible word_count {} for data_type 'double' (needs >=4)",
-                    word_count
-                ));
-            }
+        TagDataType::Double if word_count < 4 => {
+            return Err(anyhow!(
+                "Incompatible word_count {} for data_type 'double' (needs >=4)",
+                word_count
+            ));
         }
         _ => {}
     }
@@ -204,22 +200,18 @@ pub fn tagconfig_to_modbus_mapping(t: &TagConfig) -> Result<driver_modbus::Modbu
 
     // Validate word/quantity compatibility against the declared data type
     match data_type {
-        TagDataType::Float | TagDataType::Int32 | TagDataType::UInt32 => {
-            if quantity < 2 {
-                return Err(anyhow!(
-                    "Incompatible word_count {} for data_type '{}' (needs >=2)",
-                    quantity,
-                    t.data_type
-                ));
-            }
+        TagDataType::Float | TagDataType::Int32 | TagDataType::UInt32 if quantity < 2 => {
+            return Err(anyhow!(
+                "Incompatible word_count {} for data_type '{}' (needs >=2)",
+                quantity,
+                t.data_type
+            ));
         }
-        TagDataType::Double => {
-            if quantity < 4 {
-                return Err(anyhow!(
-                    "Incompatible word_count {} for data_type 'double' (needs >=4)",
-                    quantity
-                ));
-            }
+        TagDataType::Double if quantity < 4 => {
+            return Err(anyhow!(
+                "Incompatible word_count {} for data_type 'double' (needs >=4)",
+                quantity
+            ));
         }
         _ => {}
     }

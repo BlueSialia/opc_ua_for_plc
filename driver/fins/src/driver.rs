@@ -933,21 +933,19 @@ impl driver_common::ProtocolDriver for FinsDriver {
             }
             // Basic data type vs word_count check
             match m.data_type {
-                TagDataType::Float | TagDataType::Int32 | TagDataType::UInt32 => {
-                    if m.word_count < 2 {
-                        return Err(Box::new(DriverError::mapping(format!(
-                            "Mapping '{}' data_type requires word_count >= 2",
-                            m.tag_id
-                        ))));
-                    }
+                TagDataType::Float | TagDataType::Int32 | TagDataType::UInt32
+                    if m.word_count < 2 =>
+                {
+                    return Err(Box::new(DriverError::mapping(format!(
+                        "Mapping '{}' data_type requires word_count >= 2",
+                        m.tag_id
+                    ))));
                 }
-                TagDataType::Double => {
-                    if m.word_count < 4 {
-                        return Err(Box::new(DriverError::mapping(format!(
-                            "Mapping '{}' data_type 'Double' requires word_count >= 4",
-                            m.tag_id
-                        ))));
-                    }
+                TagDataType::Double if m.word_count < 4 => {
+                    return Err(Box::new(DriverError::mapping(format!(
+                        "Mapping '{}' data_type 'Double' requires word_count >= 4",
+                        m.tag_id
+                    ))));
                 }
                 _ => {}
             }
