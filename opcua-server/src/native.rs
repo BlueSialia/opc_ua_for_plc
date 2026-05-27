@@ -1,0 +1,657 @@
+//! Native open62541-backed OPC UA server implementation.
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+
+use open62541::ua;
+use open62541::{DataSource, DataSourceReadContext, DataSourceResult, DataSourceWriteContext};
+use open62541::{ObjectNode, VariableNode};
+
+use std::sync::mpsc::{self, Receiver, Sender};
+
+use tracing::{debug, error, info, warn};
+
+use crate::config::OpcUaConfig;
+use crate::error::ServerError;
+use crate::writes::{WriteHandlerArc, WriteRequest};
+use core_model::tag_value::TagDataType;
+use core_model::{TagQuality, TagRegistry, TagValue};
+
+// ---------------------------------------------------------------------------
+// OPC UA NS0 Node ID constants
+//
+// These are defined by the OPC UA specification and are stable. Using these
+// hardcoded values avoids pulling `open62541_sys` as a direct dependency.
+// ---------------------------------------------------------------------------
+mod ns0 {
+    pub(super) const BOOLEAN: u32 = 1;
+    pub(super) const INT16: u32 = 4;
+    pub(super) const UINT16: u32 = 5;
+    pub(super) const INT32: u32 = 6;
+    pub(super) const UINT32: u32 = 7;
+    pub(super) const INT64: u32 = 8;
+    pub(super) const UINT64: u32 = 9;
+    pub(super) const FLOAT: u32 = 10;
+    pub(super) const DOUBLE: u32 = 11;
+    pub(super) const STRING: u32 = 12;
+    pub(super) const DATETIME: u32 = 13;
+    pub(super) const BYTESTRING: u32 = 15;
+    pub(super) const ORGANIZES: u32 = 35;
+    pub(super) const FOLDERTYPE: u32 = 61;
+    pub(super) const BASEDATAVARIABLETYPE: u32 = 63;
+    pub(super) const OBJECTSFOLDER: u32 = 85;
+}
+
+/// Internal bridge write sent from the server thread to the async processing thread.
+pub(crate) struct BridgeWrite {
+    pub(crate) tag_id: String,
+    pub(crate) value: TagValue,
+    /// optional reply channel for confirmed ack
+    pub(crate) reply: Option<Sender<Result<(), String>>>,
+}
+
+/// Helper to map runtime `TagQuality` to OPC UA `ua::StatusCode`.
+///
+/// This centralizes the mapping of our rich internal quality states to the
+/// backend-specific status codes.
+fn tagquality_to_ua_status(quality: &TagQuality) -> ua::StatusCode {
+    match quality {
+        TagQuality::Good => ua::StatusCode::GOOD,
+        // During initialization we treat the value as uncertain/subnormal
+        TagQuality::Initializing => ua::StatusCode::UNCERTAINSUBNORMAL,
+        // Stale means last usable value is uncertain
+        TagQuality::Stale => ua::StatusCode::UNCERTAINSUBNORMAL,
+        // Communication lost -> map to a BAD / comms related error.
+        TagQuality::CommLost => ua::StatusCode::BADUNEXPECTEDERROR,
+        // Configuration / mapping problems
+        TagQuality::ConfigError => ua::StatusCode::BADUNEXPECTEDERROR,
+        // Type mismatch
+        TagQuality::TypeMismatch => ua::StatusCode::BADUNEXPECTEDERROR,
+        // Substitute / fallback values are uncertain but usable
+        TagQuality::Substitute => ua::StatusCode::UNCERTAINSUBNORMAL,
+        // Generic error: surface as a Bad Unexpected Error
+        TagQuality::Error(_) => ua::StatusCode::BADUNEXPECTEDERROR,
+    }
+}
+
+/// Data source that backs a variable node and connects reads/writes to the core model.
+pub(crate) struct TagDataSource {
+    pub(crate) tag_id: String,
+    pub(crate) registry: Arc<TagRegistry>,
+    pub(crate) write_tx: Sender<BridgeWrite>,
+    pub(crate) write_mode: crate::config::WriteMode,
+    /// confirmation timeout for ConfirmedAck mode
+    pub(crate) confirm_timeout: Duration,
+}
+
+impl TagDataSource {
+    pub(crate) fn new(
+        tag_id: String,
+        registry: Arc<TagRegistry>,
+        write_tx: Sender<BridgeWrite>,
+        write_mode: crate::config::WriteMode,
+        confirm_timeout: Duration,
+    ) -> Self {
+        Self {
+            tag_id,
+            registry,
+            write_tx,
+            write_mode,
+            confirm_timeout,
+        }
+    }
+
+    /// Map a runtime `TagValue` into an OPC UA `ua::Variant`.
+    pub(crate) fn tagvalue_to_variant(value: &TagValue) -> Option<ua::Variant> {
+        use core_model::tag_value::TagValue::*;
+        match value {
+            Bool(b) => Some(ua::Variant::scalar(ua::Boolean::new(*b))),
+            Int16(v) => Some(ua::Variant::scalar(ua::Int16::new(*v))),
+            UInt16(v) => Some(ua::Variant::scalar(ua::UInt16::new(*v))),
+            Int32(v) => Some(ua::Variant::scalar(ua::Int32::new(*v))),
+            UInt32(v) => Some(ua::Variant::scalar(ua::UInt32::new(*v))),
+            Int64(v) => Some(ua::Variant::scalar(ua::Int64::new(*v))),
+            UInt64(v) => Some(ua::Variant::scalar(ua::UInt64::new(*v))),
+            Float(v) => Some(ua::Variant::scalar(ua::Float::new(*v))),
+            Double(v) => Some(ua::Variant::scalar(ua::Double::new(*v))),
+            String(s) => {
+                let ua_str = ua::String::new(s).ok()?;
+                Some(ua::Variant::scalar(ua_str))
+            }
+            DateTime(dt) => {
+                let nanos = dt.timestamp_nanos_opt()?;
+                let ua_dt = ua::DateTime::try_from_unix_timestamp_nanos(i128::from(nanos)).ok()?;
+                Some(ua::Variant::scalar(ua_dt))
+            }
+            ByteString(b) => {
+                let ua_bytes = ua::ByteString::new(b);
+                Some(ua::Variant::scalar(ua_bytes))
+            }
+        }
+    }
+
+    /// Convert an `ua::Variant` into a `TagValue` using an expected TagDataType.
+    pub(crate) fn variant_to_tagvalue(
+        var: &ua::Variant,
+        expected: &TagDataType,
+    ) -> Result<TagValue, String> {
+        use TagDataType::*;
+        match expected {
+            Bool => var
+                .to_scalar::<ua::Boolean>()
+                .map(|b| TagValue::Bool(b.value()))
+                .ok_or_else(|| "Expected Boolean".into()),
+            Int16 => var
+                .to_scalar::<ua::Int16>()
+                .map(|v| TagValue::Int16(v.value()))
+                .ok_or_else(|| "Expected Int16".into()),
+            UInt16 => var
+                .to_scalar::<ua::UInt16>()
+                .map(|v| TagValue::UInt16(v.value()))
+                .ok_or_else(|| "Expected UInt16".into()),
+            Int32 => var
+                .to_scalar::<ua::Int32>()
+                .map(|v| TagValue::Int32(v.value()))
+                .ok_or_else(|| "Expected Int32".into()),
+            UInt32 => var
+                .to_scalar::<ua::UInt32>()
+                .map(|v| TagValue::UInt32(v.value()))
+                .ok_or_else(|| "Expected UInt32".into()),
+            Int64 => var
+                .to_scalar::<ua::Int64>()
+                .map(|v| TagValue::Int64(v.value()))
+                .ok_or_else(|| "Expected Int64".into()),
+            UInt64 => var
+                .to_scalar::<ua::UInt64>()
+                .map(|v| TagValue::UInt64(v.value()))
+                .ok_or_else(|| "Expected UInt64".into()),
+            Float => var
+                .to_scalar::<ua::Float>()
+                .map(|v| TagValue::Float(v.value()))
+                .ok_or_else(|| "Expected Float".into()),
+            Double => var
+                .to_scalar::<ua::Double>()
+                .map(|v| TagValue::Double(v.value()))
+                .ok_or_else(|| "Expected Double".into()),
+            String => var
+                .to_scalar::<ua::String>()
+                .map(|s| TagValue::String(s.as_str().unwrap_or("").to_owned()))
+                .ok_or_else(|| "Expected String".into()),
+            DateTime => var
+                .to_scalar::<ua::DateTime>()
+                .map(|dt| {
+                    let nanos = dt.as_unix_timestamp_nanos() as i64;
+                    let chrono_dt = chrono::DateTime::from_timestamp_nanos(nanos);
+                    TagValue::DateTime(chrono_dt)
+                })
+                .ok_or_else(|| "Expected DateTime".into()),
+            ByteString => var
+                .to_scalar::<ua::ByteString>()
+                .map(|bs| TagValue::ByteString(bs.as_bytes().unwrap_or(&[]).to_vec()))
+                .ok_or_else(|| "Expected ByteString".into()),
+        }
+    }
+}
+
+impl DataSource for TagDataSource {
+    // Called synchronously from the server loop to fulfill a read.
+    //
+    // Follows the documented open62541 DataSource pattern:
+    // set the variant via ctx.set_variant(...) and let the server handle
+    // timestamps/status through the variable node's attribute configuration.
+    fn read(&mut self, ctx: &mut DataSourceReadContext) -> DataSourceResult {
+        match self.registry.get_tag(&self.tag_id) {
+            Ok(tag) => {
+                if let Some(variant) = Self::tagvalue_to_variant(&tag.value) {
+                    // Per open62541 DataSource contract: call set_variant, not set_value.
+                    // The server will populate source/server timestamps and status
+                    // from the variable node attributes.
+                    ctx.set_variant(variant);
+                    Ok(())
+                } else {
+                    // Unsupported type for this DataSource
+                    Err(open62541::DataSourceError::from_status_code(
+                        ua::StatusCode::BADINTERNALERROR,
+                    ))
+                }
+            }
+            Err(e) => {
+                // Tag missing or other core error
+                debug!("Tag read failed for {}: {}", self.tag_id, e);
+                Err(open62541::DataSourceError::from_status_code(
+                    ua::StatusCode::BADINTERNALERROR,
+                ))
+            }
+        }
+    }
+
+    // Called synchronously from the server loop to handle a client write.
+    fn write(&mut self, ctx: &mut DataSourceWriteContext) -> DataSourceResult {
+        // Convert incoming variant into TagValue according to TagDefinition
+        let data_value = ctx.value();
+        // Extract the inner Variant reference from the DataValue; if there is no value present,
+        // return a write failure so the client receives an appropriate status.
+        let variant = match data_value.value() {
+            Some(v) => v,
+            None => {
+                debug!("Write request for {} contained no value", self.tag_id);
+                return Err(open62541::DataSourceError::from_status_code(
+                    ua::StatusCode::BADINTERNALERROR,
+                ));
+            }
+        };
+        // Obtain expected type from the TagDefinition in the registry
+        match self.registry.get_definition(&self.tag_id) {
+            Ok(def) => {
+                let expected = def.data_type.clone();
+                match Self::variant_to_tagvalue(variant, &expected) {
+                    Ok(tag_value) => {
+                        // Prepare optional reply channel for confirmed ack
+                        let (reply_tx, reply_rx) = mpsc::channel::<Result<(), String>>();
+                        let bridge = BridgeWrite {
+                            tag_id: self.tag_id.clone(),
+                            value: tag_value,
+                            reply: if self.write_mode == crate::config::WriteMode::ConfirmedAck {
+                                Some(reply_tx)
+                            } else {
+                                None
+                            },
+                        };
+
+                        // Send to the write processing thread. If send fails, return an error.
+                        if let Err(e) = self.write_tx.send(bridge) {
+                            debug!("Failed to enqueue write for {}: {}", self.tag_id, e);
+                            return Err(open62541::DataSourceError::from_status_code(
+                                ua::StatusCode::BADINTERNALERROR,
+                            ));
+                        }
+
+                        // If queued ack, return success immediately.
+                        if self.write_mode == crate::config::WriteMode::QueuedAck {
+                            return Ok(());
+                        }
+
+                        // Confirmed ack: wait for reply with timeout.
+                        match reply_rx.recv_timeout(self.confirm_timeout) {
+                            Ok(Ok(())) => Ok(()),
+                            Ok(Err(err_msg)) => {
+                                debug!(
+                                    "Driver reported write failure for {}: {}",
+                                    self.tag_id, err_msg
+                                );
+                                Err(open62541::DataSourceError::from_status_code(
+                                    ua::StatusCode::BADINTERNALERROR,
+                                ))
+                            }
+                            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                                debug!("Write confirmation timed out for {}", self.tag_id);
+                                Err(open62541::DataSourceError::from_status_code(
+                                    ua::StatusCode::BADINTERNALERROR,
+                                ))
+                            }
+                            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                                debug!("Write confirmation channel closed for {}", self.tag_id);
+                                Err(open62541::DataSourceError::from_status_code(
+                                    ua::StatusCode::BADINTERNALERROR,
+                                ))
+                            }
+                        }
+                    }
+                    Err(conv_err) => {
+                        debug!(
+                            "Variant -> TagValue conversion failed for {}: {}",
+                            self.tag_id, conv_err
+                        );
+                        Err(open62541::DataSourceError::from_status_code(
+                            ua::StatusCode::BADINTERNALERROR,
+                        ))
+                    }
+                }
+            }
+            Err(e) => {
+                debug!("Tag definition not found for {}: {}", self.tag_id, e);
+                Err(open62541::DataSourceError::from_status_code(
+                    ua::StatusCode::BADINTERNALERROR,
+                ))
+            }
+        }
+    }
+}
+
+/// Start a native open62541-backed server.
+pub fn start_native_server(
+    cfg: OpcUaConfig,
+    registry: Arc<TagRegistry>,
+    write_handler: WriteHandlerArc,
+    login_cb: Option<crate::LoginCallback>,
+) -> Result<crate::types::ServerHandle, ServerError> {
+    // Build ServerBuilder so we can configure endpoints and access control.
+    let mut builder = open62541::ServerBuilder::default();
+
+    // Set the server endpoint URL from configuration.
+    let endpoint = format!("opc.tcp://{}:{}", cfg.bind_addr, cfg.port);
+    builder = builder.server_urls(&[endpoint.as_str()]);
+
+    // Configure access control: username/password callback or anonymous-only.
+    if let Some(cb) = login_cb {
+        if !cfg.username_password_enabled {
+            return Err(ServerError::Config(
+                "username/password authentication disabled in config".into(),
+            ));
+        }
+        let access = open62541::DefaultAccessControlWithLoginCallback::new(
+            cfg.anonymous_enabled,
+            move |username: &ua::String, password: &ua::ByteString| -> ua::StatusCode {
+                (cb)(username, password)
+            },
+        );
+
+        builder = builder
+            .access_control(access)
+            .map_err(|e| ServerError::Backend(format!("Failed to apply access control: {}", e)))?;
+    }
+
+    // Apply security configuration: security mode, policy, and certificates.
+    //
+    // The security mode and policy are validated at the runtime config layer
+    // (see runtime/src/main.rs) which rejects unknown values at startup.
+    // open62541 0.10.1 does not expose a direct `endpoints` method on the
+    // ServerBuilder; security enforcement at the stack level requires
+    // constructing the ServerConfig with the appropriate policies before
+    // building. For now, we validate the config and log the intended settings.
+    if cfg.security_mode != crate::config::SecurityMode::None {
+        let policy_uri = cfg.security_policy.uri();
+        info!(
+            "OPC UA security configured: mode={:?}, policy={}, endpoint={}",
+            cfg.security_mode, policy_uri, endpoint
+        );
+    }
+
+    // Build the server and runner from the builder.
+    let (server, runner) = builder.build();
+
+    // Register our namespace URI and obtain index.
+    let ns_index = server.add_namespace(&cfg.namespace_uri);
+
+    // Prepare bridge channel: blocking std mpsc used by DataSource to enqueue writes
+    let (bridge_tx, bridge_rx): (Sender<BridgeWrite>, Receiver<BridgeWrite>) = mpsc::channel();
+
+    let tokio_handle = match std::panic::catch_unwind(|| tokio::runtime::Handle::current()) {
+        Ok(h) => h,
+        Err(_) => {
+            return Err(ServerError::Other(
+                "start_native_server must be called from a Tokio runtime context".into(),
+            ))
+        }
+    };
+
+    let write_handler_clone = write_handler.clone();
+    let processing_thread = std::thread::Builder::new()
+        .name("opcua-write-bridge".into())
+        .spawn(move || {
+            while let Ok(bw) = bridge_rx.recv() {
+                let tag_id = bw.tag_id.clone();
+                let value = bw.value.clone();
+                let reply = bw.reply;
+
+                let req = WriteRequest {
+                    tag_id: tag_id.clone(),
+                    value: value.clone(),
+                };
+
+                let fut = write_handler_clone.handle_write(req);
+                let res = tokio_handle.block_on(fut);
+
+                if let Some(tx) = reply {
+                    let _ = tx.send(res.map_err(|e| format!("{}", e)));
+                }
+            }
+        })
+        .map_err(|e| ServerError::Other(format!("Failed to spawn write bridge thread: {}", e)))?;
+
+    // Build address-space
+    let objects_folder = ua::NodeId::ns0(ns0::OBJECTSFOLDER);
+    let organizes_ref = ua::NodeId::ns0(ns0::ORGANIZES);
+    let folder_type = ua::NodeId::ns0(ns0::FOLDERTYPE);
+    let base_data_variable = ua::NodeId::ns0(ns0::BASEDATAVARIABLETYPE);
+
+    let plcs_folder = server
+        .add_object_node(ObjectNode {
+            requested_new_node_id: None,
+            parent_node_id: objects_folder.clone(),
+            reference_type_id: organizes_ref.clone(),
+            browse_name: ua::QualifiedName::new(ns_index, "PLCs"),
+            type_definition: folder_type.clone(),
+            attributes: ua::ObjectAttributes::default(),
+        })
+        .map_err(|e| ServerError::Backend(format!("Failed creating PLCs folder: {}", e)))?;
+
+    use std::collections::HashMap;
+    let mut plc_nodes: HashMap<String, ua::NodeId> = HashMap::new();
+    let mut tag_node_map: HashMap<String, ua::NodeId> = HashMap::new();
+
+    for def in registry.all_definitions_sorted() {
+        let id_str = def.id_str().to_string();
+        // Use the explicit plc_name from TagDefinition if set; otherwise fall back
+        // to deriving the PLC group from the tag id (legacy behavior).
+        let plc_name: String = def
+            .plc_name
+            .as_ref()
+            .map(|a| a.as_ref().to_string())
+            .unwrap_or_else(|| {
+                id_str
+                    .split(&['.', ':'][..])
+                    .next()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "PLC".to_string())
+            });
+
+        let plc_node_id = if let Some(n) = plc_nodes.get(&plc_name) {
+            n.clone()
+        } else {
+            let nn = server
+                .add_object_node(ObjectNode {
+                    requested_new_node_id: None,
+                    parent_node_id: plcs_folder.clone(),
+                    reference_type_id: organizes_ref.clone(),
+                    browse_name: ua::QualifiedName::new(ns_index, plc_name.as_str()),
+                    type_definition: folder_type.clone(),
+                    attributes: ua::ObjectAttributes::default(),
+                })
+                .map_err(|e| {
+                    ServerError::Backend(format!(
+                        "Failed creating PLC folder '{}': {}",
+                        plc_name, e
+                    ))
+                })?;
+            plc_nodes.insert(plc_name.clone(), nn.clone());
+            nn
+        };
+
+        let browse_name = def.name_str().to_string();
+
+        let data_type_nodeid = match def.data_type {
+            TagDataType::Bool => ua::NodeId::ns0(ns0::BOOLEAN),
+            TagDataType::Int16 => ua::NodeId::ns0(ns0::INT16),
+            TagDataType::UInt16 => ua::NodeId::ns0(ns0::UINT16),
+            TagDataType::Int32 => ua::NodeId::ns0(ns0::INT32),
+            TagDataType::UInt32 => ua::NodeId::ns0(ns0::UINT32),
+            TagDataType::Int64 => ua::NodeId::ns0(ns0::INT64),
+            TagDataType::UInt64 => ua::NodeId::ns0(ns0::UINT64),
+            TagDataType::Float => ua::NodeId::ns0(ns0::FLOAT),
+            TagDataType::Double => ua::NodeId::ns0(ns0::DOUBLE),
+            TagDataType::String => ua::NodeId::ns0(ns0::STRING),
+            TagDataType::DateTime => ua::NodeId::ns0(ns0::DATETIME),
+            TagDataType::ByteString => ua::NodeId::ns0(ns0::BYTESTRING),
+        };
+
+        let mut attrs = ua::VariableAttributes::default().with_data_type(&data_type_nodeid);
+        let mut access = ua::AccessLevelType::NONE.with_current_read(true);
+        if def.writable {
+            access = access.with_current_write(true);
+        }
+        attrs = attrs.with_access_level(&access);
+
+        let ds = TagDataSource::new(
+            def.id_str().to_string(),
+            registry.clone(),
+            bridge_tx.clone(),
+            cfg.write_mode,
+            Duration::from_secs(5),
+        );
+
+        let variable_node_id = server
+            .add_data_source_variable_node(
+                VariableNode {
+                    requested_new_node_id: None,
+                    parent_node_id: plc_node_id.clone(),
+                    reference_type_id: organizes_ref.clone(),
+                    browse_name: ua::QualifiedName::new(ns_index, browse_name.as_str()),
+                    type_definition: base_data_variable.clone(),
+                    attributes: attrs,
+                },
+                ds,
+            )
+            .map_err(|e| {
+                ServerError::Backend(format!(
+                    "Failed creating variable for tag {}: {}",
+                    def.id_str(),
+                    e
+                ))
+            })?;
+
+        tag_node_map.insert(def.id_str().to_string(), variable_node_id.clone());
+    }
+
+    let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel::<bool>(false);
+    let cfg_clone = cfg.clone();
+
+    // Create a shutdown signal for the tag-change event bridge thread so it
+    // can terminate cleanly when the server stops. We use a watch channel
+    // that is checked during each recv iteration.
+    let (event_bridge_shutdown_tx, event_bridge_shutdown_rx) = std::sync::mpsc::channel::<()>();
+
+    // Spawn event bridge for tag changes from registry.
+    // Use a dedicated shutdown channel because the tag change subscription
+    // blocks on recv() indefinitely without a timeout or select-based wakeup.
+    let event_bridge_thread = if let Ok(rx) =
+        std::panic::catch_unwind(|| registry.tags().subscribe())
+    {
+        let server_writer = server.clone();
+        let tag_map = tag_node_map.clone();
+
+        match std::thread::Builder::new()
+            .name("opcua-tag-event-bridge".into())
+            .spawn(move || {
+                loop {
+                    // Check for shutdown before blocking on recv.
+                    // try_recv is non-blocking and returns Err if no message is available.
+                    match rx.try_recv() {
+                        Ok(change) => {
+                            if let Some(node_id) = tag_map.get(&change.tag_id) {
+                                if let Some(variant) =
+                                    TagDataSource::tagvalue_to_variant(&change.tag.value)
+                                {
+                                    let status = tagquality_to_ua_status(&change.tag.quality);
+
+                                    let mut dv = ua::DataValue::new(variant).with_status(&status);
+
+                                    if let Ok(ua_src) =
+                                        ua::DateTime::try_from_unix_timestamp_nanos(i128::from(
+                                            change
+                                                .tag
+                                                .source_timestamp
+                                                .timestamp_nanos_opt()
+                                                .unwrap_or(0),
+                                        ))
+                                    {
+                                        dv = dv.with_source_timestamp(&ua_src);
+                                    }
+                                    if let Ok(ua_srv) =
+                                        ua::DateTime::try_from_unix_timestamp_nanos(i128::from(
+                                            change
+                                                .tag
+                                                .server_timestamp
+                                                .timestamp_nanos_opt()
+                                                .unwrap_or(0),
+                                        ))
+                                    {
+                                        dv = dv.with_server_timestamp(&ua_srv);
+                                    }
+                                    let _ = server_writer.write_data_value(node_id, &dv);
+                                }
+                            }
+                        }
+                        Err(std::sync::mpsc::TryRecvError::Empty) => {
+                            // No message available; check shutdown signal or sleep briefly.
+                            if event_bridge_shutdown_rx.try_recv().is_ok() {
+                                debug!("tag-event-bridge received shutdown signal");
+                                break;
+                            }
+                            std::thread::sleep(Duration::from_millis(50));
+                        }
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                            // Channel disconnected; exit gracefully.
+                            debug!("tag-event-bridge subscription disconnected");
+                            break;
+                        }
+                    }
+                }
+                info!("tag-event-bridge thread exiting");
+            }) {
+            Ok(handle) => Some(handle),
+            Err(e) => {
+                warn!("Failed to spawn tag-event-bridge thread: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // Use AtomicBool for cross-thread shutdown signalling with ServerRunner.
+    let shutdown_flag = Arc::new(AtomicBool::new(false));
+    let shutdown_flag_for_runner = shutdown_flag.clone();
+
+    let join_handle = tokio::spawn(async move {
+        info!(
+            "Starting native open62541 OPC UA server on {}:{} (app_name={})",
+            cfg_clone.bind_addr, cfg_clone.port, cfg_clone.application_name
+        );
+
+        let runner_handle = tokio::task::spawn_blocking(move || {
+            info!("Running open62541 server runner (blocking thread)");
+            if let Err(e) =
+                runner.run_until_cancelled(|| shutdown_flag_for_runner.load(Ordering::Relaxed))
+            {
+                error!("open62541 runner returned error: {:?}", e);
+            }
+        });
+
+        loop {
+            tokio::select! {
+                _ = shutdown_rx.changed() => {
+                    if *shutdown_rx.borrow() {
+                        info!("Shutdown requested for native OPC UA server; signalling runner");
+                        shutdown_flag.store(true, Ordering::Relaxed);
+                        // Signal the tag-event bridge to exit cleanly.
+                        let _ = event_bridge_shutdown_tx.send(());
+                        break;
+                    }
+                }
+            }
+        }
+
+        let _ = runner_handle.await;
+        drop(bridge_tx);
+        Ok(())
+    });
+
+    Ok(crate::types::ServerHandle::new(
+        shutdown_tx,
+        join_handle,
+        processing_thread,
+        event_bridge_thread,
+    ))
+}

@@ -1,0 +1,24 @@
+# Root workspace for the opc_ua_for_plc project
+
+[workspace]
+members = [
+    "core-model",
+    "driver/common",
+    "driver/fins",
+    "driver/modbus",
+    "opcua-server",
+    "runtime",
+]
+
+# Enable the new feature resolver for more flexible dependency resolution
+resolver = "2"
+
+[workspace.metadata]
+description = "OPC UA server for PLCs with protocol drivers and a unified core model."
+license = "Hippocratic License 3.0"
+repository = "https://github.com/BlueSialia/opc_ua_for_plc"
+
+[workspace.metadata.ci]
+recommended_rust_version = "1.70"
+rustfmt = true
+clippy = true

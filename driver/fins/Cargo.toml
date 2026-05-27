@@ -1,0 +1,59 @@
+[package]
+name = "driver-fins"
+version = "0.1.0"
+edition = "2021"
+description = "Omron FINS over TCP driver for the opc_ua_for_plc gateway"
+license = "Hippocratic License 3.0"
+repository = "https://github.com/BlueSialia/opc_ua_for_plc"
+documentation = "https://github.com/BlueSialia/opc_ua_for_plc/blob/main/driver/fins"
+authors = ["Jorge Domínguez Arnáez (BlueSialia) <bluesialia@gmail.com>"]
+readme = "../../README.md"
+publish = false
+
+[lib]
+name = "driver_fins"
+path = "src/lib.rs"
+
+[dependencies]
+# Core internal model (workspace member)
+core-model = { path = "../../core-model" }
+
+# Shared driver trait crate (common utilities for all drivers)
+# Use an explicit crate alias so consumers import `driver_common` while the
+# package is named `driver-common` in the workspace. This avoids hyphen/underscore
+# name inconveniences when using `use` in Rust code.
+driver_common = { package = "driver-common", path = "../common" }
+
+# Async runtime for TCP and scheduling
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "io-util", "sync"] }
+
+# Byte buffers and utilities
+bytes = "1"
+byteorder = "1"
+
+# Async trait helper for trait objects with async functions
+async-trait = "0.1"
+
+# Errors
+thiserror = "2.0"
+
+# Chrono for timestamps (used by the driver)
+chrono = { version = "0.4", features = ["serde"] }
+
+# (De)serialization for configuration helpers, tests, debug
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Tracing/logging
+tracing = "0.1"
+
+# Utilities for futures/select
+futures = "0.3"
+
+[features]
+default = ["native"]
+native = []
+
+[package.metadata]
+keywords = ["fins", "omron", "plc", "driver", "opcua"]
+categories = ["network-programming", "embedded"]

@@ -1,0 +1,35 @@
+name: Update binary baseline
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  update:
+    name: Update baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Record baseline
+        run: |
+          find target/release -maxdepth 1 -type f -executable \
+            -exec stat --format='%n %s' {} \; \
+            | sort \
+            | jq -R 'split(" ") | {(.[0] | split("/")[-1]): (.[1] | tonumber)}' \
+            | jq -s add > baseline.json
+          echo "Baseline updated:"
+          cat baseline.json
+
+      - name: Save baseline to cache
+        uses: actions/cache/save@v4
+        with:
+          path: baseline.json
+          key: binary-baseline-main

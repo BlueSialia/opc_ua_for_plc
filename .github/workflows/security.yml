@@ -1,0 +1,25 @@
+name: Security audit
+
+on:
+  pull_request:
+    paths:
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - "deny.toml"
+  schedule:
+    - cron: "0 6 * * 1" # Every Monday at 06:00 UTC
+
+jobs:
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        checks:
+          - advisories
+          - bans licenses sources
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check ${{ matrix.checks }}

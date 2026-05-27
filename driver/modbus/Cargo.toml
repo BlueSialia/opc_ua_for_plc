@@ -1,0 +1,48 @@
+[package]
+name = "driver-modbus"
+version = "0.1.0"
+edition = "2021"
+description = "Modbus/TCP driver for the opc_ua_for_plc gateway (async, tokio-based)"
+license = "Hippocratic License 3.0"
+repository = "https://github.com/BlueSialia/opc_ua_for_plc"
+documentation = "https://github.com/BlueSialia/opc_ua_for_plc/blob/main/driver/modbus"
+authors = ["Jorge Domínguez Arnáez (BlueSialia) <bluesialia@gmail.com>"]
+readme = "../../README.md"
+publish = false
+
+[lib]
+name = "driver_modbus"
+path = "src/lib.rs"
+
+[dependencies]
+# Core internal model (workspace member)
+core-model = { path = "../../core-model" }
+driver_common = { package = "driver-common", path = "../common" }
+
+# Async runtime
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
+
+# Async modbus client (Modbus TCP, async). Version chosen for compatibility with tokio 1.x.
+tokio-modbus = "0.17"
+
+# Utilities & ergonomics
+serde = { version = "1.0", features = ["derive"] }
+# Chrono for timestamps (used by drivers)
+chrono = { version = "0.4", features = ["serde"] }
+serde_json = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+async-trait = "0.1"
+bytes = "1"
+byteorder = "1"
+
+# Optional: futures utilities
+futures = "0.3"
+
+[features]
+default = ["native"]
+native = []
+
+[package.metadata]
+keywords = ["modbus", "plc", "driver", "opcua", "modbus-tcp"]
+categories = ["network-programming", "embedded"]
