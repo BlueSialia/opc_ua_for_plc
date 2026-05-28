@@ -65,6 +65,7 @@ mod tests {
     use super::*;
     use crate::tag_value::TagDataType;
 
+    /// #feature CORE-DEF
     #[test]
     fn create_and_query_store() {
         let defs = vec![
@@ -86,6 +87,7 @@ mod tests {
         assert_eq!(ids, vec!["a".to_string(), "b".to_string()]);
     }
 
+    /// #feature CORE-DEF
     #[test]
     fn duplicate_definition_fails() {
         let defs = vec![

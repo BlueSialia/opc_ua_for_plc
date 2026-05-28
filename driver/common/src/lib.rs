@@ -37,7 +37,7 @@ pub trait ProtocolDriver: Send + Sync {
     /// Perform a single poll/read cycle.
     ///
     /// Implementations should perform a single logical iteration: connect if
-    /// necessary, perform reads, apply updates to the TagStore, drain pending
+    /// necessary, perform reads, apply updates to the `TagRegistry`, drain pending
     /// writes, emit health/events and then return.
     async fn read_cycle(&self) -> Result<(), DynDriverError>;
 
@@ -83,6 +83,7 @@ mod tests {
         // use default health()
     }
 
+    /// #feature RUNTIME
     #[tokio::test]
     async fn dummy_driver_runs() {
         let d = DummyDriver;

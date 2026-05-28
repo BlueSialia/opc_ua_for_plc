@@ -13,6 +13,103 @@ A Rust repository for an OPC UA gateway for PLCs. It provides a protocol-agnosti
 
 For more details on the project structure and design, see the [ADR](ADR.md) document.
 
+## OPC UA Feature Coverage
+
+<details>
+<summary>OPC UA feature checklist</summary>
+
+Test functions are tagged with `#feature <ID>`.
+
+### Protocol & Transport
+
+- [x] `UA-TCP` — UA-TCP Binary Protocol (`opc.tcp`)
+- [ ] `UA-SECURE-CONV` — UA-SecureConversation (encrypted channels)
+- [ ] `UA-HTTPS` — HTTPS/SOAP Web Services transport
+- [ ] `UA-REV-CONN` — Reverse Connect
+- [ ] `UA-PUBSUB` — PubSub (MQTT / AMQP / UDP)
+
+### Address Space
+
+- [x] `UA-OBJ` — Object Nodes
+- [x] `UA-VAR` — Variable Nodes
+- [ ] `UA-METHOD` — Method Nodes
+- [x] `UA-REF` — Reference Types (Organizes)
+- [x] `UA-BROWSE` — Hierarchical Browse structure
+- [x] `UA-NS` — Custom Namespaces
+- [x] `UA-NODEID` — String NodeIds
+- [ ] `UA-NODEID-NUM` — Numeric / Opaque / GUID NodeIds
+- [ ] `UA-VIEW` — View Nodes
+
+### Data Access
+
+- [x] `UA-READ` — Read service
+- [x] `UA-WRITE` — Write service
+- [x] `UA-TYPES` — Built-in Data Types (Bool, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float, Double, String, DateTime, ByteString)
+- [ ] `UA-CUSTOM-TYPES` — Custom / Structured Data Types
+- [x] `UA-ACCESS` — Access Levels (CurrentRead, CurrentWrite)
+- [x] `UA-QUALITY` — Value Quality / StatusCode mapping
+- [x] `UA-TS` — Source / Server Timestamps
+
+### Services
+
+- [x] `UA-SESSION` — Session Service
+- [ ] `UA-METHOD` — Method Service
+- [ ] `UA-QUERY` — Query Service
+- [ ] `UA-HISTORY` — History Read / Update Service
+- [ ] `UA-DISCOVERY` — Discovery Service (FindServers, GetEndpoints, RegisterServer)
+- [ ] `UA-NODEMGMT` — Node Management Service (Add / Delete Nodes at runtime)
+
+### Security
+
+- [x] `UA-SEC-NONE` — None Security Mode
+- [ ] `UA-SEC-SIGN` — Sign Security Mode
+- [ ] `UA-SEC-ENCRYPT` — SignAndEncrypt Security Mode
+- [ ] `UA-SEC-POLICIES` — Security Policies (Basic128Rsa15, Basic256, Basic256Sha256)
+- [x] `UA-AUTH-ANON` — Anonymous Authentication
+- [x] `UA-AUTH-PASS` — Username / Password Authentication
+- [ ] `UA-AUTH-CERT` — X.509 Certificate Authentication
+- [ ] `UA-SEC-TRUST` — Trust Store
+- [ ] `UA-SEC-REJECT` — Rejected Certificate Store
+
+### Subscriptions & Events
+
+- [x] `UA-SUBS` — Subscriptions
+- [x] `UA-MONITOR` — Monitored Items
+- [x] `UA-PUBLISH` — Publish / Republish
+- [ ] `UA-EVENT-FILTER` — Event Filters
+- [ ] `UA-ALARMS` — Alarms & Conditions (A&C)
+- [ ] `UA-AUDIT` — Audit Events
+
+### Advanced Features
+
+- [ ] `UA-HDA` — Historical Data Access (HDA)
+- [ ] `UA-AGGREGATES` — Aggregates (Min, Max, Avg, etc.)
+- [ ] `UA-PROGRAMS` — Methods / Programs
+- [ ] `UA-FILE` — File Transfer
+- [ ] `UA-COMPANION` — Companion Specifications
+- [ ] `UA-SEMANTIC` — Semantic Annotations
+- [ ] `UA-REDUNDANCY` — Redundancy (Server / Client failover)
+- [ ] `UA-DIAG` — Server Diagnostics & Status Variables
+
+### Protocol Drivers
+
+Already implemented:
+
+- [x] `DRV-MODBUS` — Modbus TCP
+- [x] `DRV-FINS` — Omron FINS
+- [ ] `DRV-S7` — Siemens S7 (S7comm)
+- [ ] `DRV-EIP` — EtherNet/IP (CIP)
+- [ ] `DRV-PROFINET` — PROFINET
+- [ ] `DRV-BACNET` — BACnet
+- [ ] `DRV-DNP3` — DNP3
+- [ ] `DRV-IEC104` — IEC 60870-5-104
+- [ ] `DRV-MELSEC` — MELSEC (Mitsubishi)
+- [ ] `DRV-SPARKPLUG` — MQTT Sparkplug B
+- [ ] `DRV-DF1` — DF1 / PCCC (Allen-Bradley)
+- [ ] `DRV-HOSTLINK` — HostLink (Omron)
+
+</details>
+
 ## Getting Started
 
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.

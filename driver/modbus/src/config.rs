@@ -23,18 +23,30 @@ fn default_io_timeout_ms() -> u64 {
 /// Configuration for a Modbus/TCP driver instance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModbusConfig {
+    /// Logical name for the PLC / driver instance.
     pub name: String,
+
+    /// TCP endpoint of the PLC (e.g. `127.0.0.1:502`).
     pub endpoint: SocketAddr,
+
+    /// Modbus unit/slave id (1-255). Required for multi-slave environments.
     pub unit_id: u8,
+
+    /// Poll cycle in milliseconds.
     pub cycle_ms: u64,
+
+    /// Per-tag mappings for this PLC instance.
     pub mappings: Vec<ModbusMapping>,
 
+    /// TCP keepalive in seconds (default: 30).
     #[serde(default = "default_keepalive_secs")]
     pub keepalive_secs: u64,
 
+    /// Maximum reconnect backoff in seconds (default: 30).
     #[serde(default = "default_max_backoff_secs")]
     pub max_backoff_secs: u64,
 
+    /// IO timeout in milliseconds for Modbus operations (default: 2000).
     #[serde(default = "default_io_timeout_ms")]
     pub io_timeout_ms: u64,
 }
@@ -68,6 +80,7 @@ mod tests {
     use core_model::WordOrder;
     use std::str::FromStr;
 
+    /// #feature DRV-MODBUS
     #[test]
     fn defaults_are_set() {
         let cfg = ModbusConfig {
@@ -86,6 +99,7 @@ mod tests {
         assert_eq!(cfg.io_timeout_ms, 2000);
     }
 
+    /// #feature DRV-MODBUS
     #[test]
     fn create_with_new_and_mapping() {
         let mapping = crate::mapping::ModbusMapping::new(

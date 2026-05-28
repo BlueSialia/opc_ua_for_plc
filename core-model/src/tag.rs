@@ -59,12 +59,14 @@ mod tests {
     use crate::tag_value::TagValue;
     use chrono::Duration;
 
+    /// #feature UA-QUALITY
     #[test]
-    fn new_tag_defaults_uncertain() {
+    fn new_tag_defaults_initializing() {
         let t = Tag::new(TagValue::UInt16(0));
         assert_eq!(t.quality, TagQuality::Initializing);
     }
 
+    /// #feature UA-TS
     #[test]
     fn is_stale_detects_staleness() {
         let mut t = Tag::new(TagValue::Float(1.0));
@@ -73,6 +75,7 @@ mod tests {
         assert!(!t.is_stale(Duration::seconds(60)));
     }
 
+    /// #feature UA-TS, UA-QUALITY
     #[test]
     fn apply_read_updates_values_and_timestamps() {
         let mut t = Tag::new(TagValue::UInt16(1));

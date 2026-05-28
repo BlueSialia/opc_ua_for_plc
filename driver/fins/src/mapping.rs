@@ -78,12 +78,14 @@ mod tests {
     use super::*;
     use core_model::WordOrder;
 
+    /// #feature DRV-FINS
     #[test]
     fn default_helpers_work() {
         assert_eq!(default_word_count(), 1);
         assert_eq!(default_bit_offset(), 0);
     }
 
+    /// #feature DRV-FINS
     #[test]
     fn new_mapping_fields() {
         let m = TagMapping::new(

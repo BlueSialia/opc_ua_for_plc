@@ -174,6 +174,7 @@ mod tests {
     use super::*;
     use chrono::{TimeZone, Utc};
 
+    /// #feature UA-TYPES
     #[test]
     fn matches_detection() {
         assert!(TagValue::UInt16(1).matches(&TagDataType::UInt16));
@@ -182,6 +183,7 @@ mod tests {
         assert!(TagValue::UInt64(10).matches(&TagDataType::UInt64));
     }
 
+    /// #feature UA-TYPES
     #[test]
     fn data_type_inference() {
         assert_eq!(TagValue::Bool(true).data_type(), TagDataType::Bool);
@@ -199,6 +201,7 @@ mod tests {
         );
     }
 
+    /// #feature UA-TYPES
     #[test]
     fn byte_vec_helpers() {
         let bytes = vec![0xAA, 0xBB, 0xCC, 0xDD];
@@ -228,6 +231,7 @@ mod tests {
         assert_eq!(bytes_6, vec![0xDD, 0xCC, 0xBB, 0xAA, 0xFF, 0xEE]);
     }
 
+    /// #feature UA-QUALITY
     #[test]
     fn tag_quality_default_is_initializing() {
         assert_eq!(TagQuality::default(), TagQuality::Initializing);

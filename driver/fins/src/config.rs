@@ -75,6 +75,7 @@ mod tests {
     use core_model::{TagDataType, WordOrder};
     use std::str::FromStr;
 
+    /// #feature DRV-FINS
     #[test]
     fn default_values_are_set() {
         let cfg = FinsConfig {
@@ -90,6 +91,7 @@ mod tests {
         assert_eq!(cfg.max_backoff_secs, 30);
     }
 
+    /// #feature DRV-FINS
     #[test]
     fn create_with_new_and_mapping() {
         let mapping = TagMapping::new(

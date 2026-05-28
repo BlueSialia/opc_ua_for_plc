@@ -27,12 +27,13 @@ use tokio_modbus::slave::Slave;
 
 use driver_common::{DynDriverError, ProtocolDriver};
 
-/// Modbus driver implementation.
+/// Modbus driver holding connection state and interacting with the TagRegistry.
 pub struct ModbusDriver {
     config: ModbusConfig,
     registry: Arc<TagRegistry>,
     write_tx: mpsc::Sender<WriteRequest>,
     write_rx: Arc<Mutex<mpsc::Receiver<WriteRequest>>>,
+    /// Persistent Modbus client context.
     client: Arc<Mutex<Option<ClientContext>>>,
     /// Shutdown signal receiver.
     pub shutdown_rx: tokio::sync::watch::Receiver<bool>,
@@ -303,10 +304,9 @@ impl ModbusDriver {
 }
 
 impl ModbusDriver {
-    /// Internal implementation of a single read/write cycle returning the
-    /// driver-specific `DriverError`. This allows the runtime-facing adapter to
-    /// call into the protocol implementation and convert errors into the boxed
-    /// `DynDriverError` used by the runtime abstraction.
+    /// Internal implementation of a single read/write cycle, returning the
+    /// driver-specific `DriverError`. The runtime-facing `ProtocolDriver` adapter
+    /// calls this and converts errors into the boxed `DynDriverError`.
     #[instrument(skip(self), fields(driver = %self.config.name))]
     pub async fn run_read_cycle_impl(&self) -> Result<(), DriverError> {
         // Reuse or establish persistent client context.
@@ -350,6 +350,7 @@ impl ModbusDriver {
             for _ in 0..64 {
                 match rx.try_recv() {
                     Ok(req) => {
+                        debug!(tag=%req.tag_id, value=?req.value, "Processing queued write");
                         // Find mapping for this tag (clone to own)
                         let mapping = match self
                             .config
@@ -832,9 +833,6 @@ impl ModbusDriver {
 }
 
 /// Convert TagValue (write request) into `Vec<u16>` registers suitable for Modbus write methods.
-///
-/// This helper is placed here (originally in the monolithic file) because it's small
-/// and used by the write handling code.
 pub fn tagvalue_to_registers(value: &TagValue) -> Result<Vec<u16>, DriverError> {
     match value {
         TagValue::Bool(b) => Ok(vec![if *b { 1u16 } else { 0u16 }]),
@@ -1044,6 +1042,7 @@ mod tests {
     use std::net::SocketAddr;
     use std::str::FromStr;
 
+    /// #feature DRV-MODBUS
     #[tokio::test]
     async fn instantiate_driver_and_queue_write() {
         // Build a TagRegistry containing a single definition for "tag1".
@@ -1086,6 +1085,7 @@ mod tests {
             .expect("should queue write");
     }
 
+    /// #feature DRV-MODBUS, UA-TYPES
     #[test]
     fn register_bytes_endianness() {
         let regs = vec![0x1234u16, 0xABCDu16];

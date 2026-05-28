@@ -1,4 +1,5 @@
-//! Runtime wrapper around `ProtocolDriver`: polling, backoff, health emission and shutdown.
+//! Runtime wrapper around `ProtocolDriver`: polling, exponential backoff, health
+//! emission, staleness checks, and shutdown coordination.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,7 +15,8 @@ use tracing::{debug, error, info, warn};
 use rand::RngExt;
 use serde_json::Value as JsonValue;
 
-/// Runtime wrapper adding polling, backoff, health emission and shutdown.
+/// Runtime wrapper around a protocol driver, adding polling, backoff, health
+/// emission, staleness checks, and coordinated shutdown.
 pub struct RuntimeDriver {
     /// Logical name for the driver/PLC instance (for logs and health).
     pub name: String,
@@ -290,6 +292,7 @@ mod tests {
         }
     }
 
+    /// #feature RUNTIME
     #[tokio::test]
     async fn runtime_driver_start_stop() {
         let proto = Arc::new(DummyProtoDriver) as Arc<dyn ProtocolDriver>;

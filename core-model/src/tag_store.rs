@@ -128,7 +128,7 @@ impl TagStore {
                 .sorted_ids
                 .binary_search_by(|a| a.as_ref().cmp(arc_id.as_ref()))
             {
-                Ok(pos) => pos, // equal keys shouldn't happen because `index` was checked above,
+                Ok(pos) => pos, // equal keys shouldn't happen because `index` was checked above
                 Err(pos) => pos,
             };
             // Preserve an owned string copy of the id before moving `arc_id` into `sorted_ids`.
@@ -280,6 +280,7 @@ mod tests {
     use super::*;
     use crate::tag_value::TagValue;
 
+    /// #feature CORE-STORE
     #[test]
     fn insert_and_get() {
         let store = TagStore::new();
@@ -288,6 +289,7 @@ mod tests {
         assert_eq!(*t.value, TagValue::UInt16(1));
     }
 
+    /// #feature CORE-STORE
     #[test]
     fn update_and_snapshot() {
         let store = TagStore::new();
@@ -306,6 +308,7 @@ mod tests {
         assert_eq!(*s.value, TagValue::Float(std::f32::consts::PI));
     }
 
+    /// #feature CORE-STORE
     #[test]
     fn try_update_with_applies_changes() {
         let store = TagStore::new();

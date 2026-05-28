@@ -12,7 +12,7 @@ In the context of building a reliable, high-performance OPC UA server,
 facing choices like C/C++ or Node.js,
 we decided to implement the system in Rust
 to achieve strong memory safety and modern async concurrency,
-accepting Rust’s steeper learning curve and smaller ecosystem.
+accepting Rust's steeper learning curve and smaller ecosystem.
 
 ### Non-Rust OPC UA Library
 
@@ -215,3 +215,49 @@ facing the difficulty of filtering "needle-in-a-haystack" errors in flat log fil
 we decided to use the `tracing` crate with structured fields (e.g., `plc_name`, `tag_id`),
 to achieve high observability and rapid fault isolation,
 accepting the overhead of maintaining consistent field naming conventions across the codebase.
+
+## Testing
+
+### Layered Testing with In-Process Protocol Servers
+
+In the context of validating protocol driver correctness for industrial deployments,
+facing the choice between mocking at the trait boundary versus exercising real TCP connections,
+we decided to use real protocol servers spawned in-process like `tokio-modbus` in server mode for driver integration tests
+and neglected purely mocked/dummy `ProtocolDriver` implementations for protocol-level validation,
+to achieve genuine bytes-on-the-wire confidence while keeping tests fast and CI-friendly,
+accepting that protocol servers must be available as Rust libraries and that some protocols lack suitable in-process implementations.
+
+### Containerized End-to-End Tests as Pre-Release Gate
+
+In the context of validating the full gateway pipeline (config → runtime → drivers → OPC UA server → client),
+facing the prohibitive cost and complexity of buying physical PLCs and SCADA licenses,
+we decided to use Docker Compose with containerized protocol emulators and a scriptable OPC UA client
+and neglected running these end-to-end tests in CI,
+to achieve deployment-like integration confidence while keeping CI responsive,
+accepting that these tests must be executed manually before each release and that container-based emulators are approximations of real hardware.
+
+### Network Fault Injection for Chaos Testing
+
+In the context of verifying the gateway's resilience to real-world network conditions,
+facing the risk of undetected reconnect bugs, timeout misconfigurations, and silent data staleness,
+we decided to use `tc netem` for kernel-level traffic shaping within Docker networks
+and neglected application-level fault injection libraries such as `toxiproxy`,
+to achieve fine-grained control over packet loss, latency, and connection drops without additional service dependencies,
+accepting that `tc netem` requires privileged containers and is Linux-specific.
+
+### Deferred FINS Protocol Integration Testing
+
+In the context of testing the Omron FINS driver with real protocol frames,
+facing the absence of any trusted, open-source, container-friendly FINS emulator,
+we decided to defer true protocol-level FINS integration testing
+and neglected writing a custom FINS memory server or using proprietary Windows-only simulators,
+to avoid maintaining a protocol reference implementation and introducing non-containerizable test dependencies,
+accepting that FINS driver confidence relies solely on unit tests for frame construction, write queuing, and read-group splitting until a suitable emulator emerges.
+
+### Feature-Tagged Test Coverage
+
+In the context of maintaining a high confidence in which features are supported by the library,
+facing the inability to verify which features are genuinely supported versus wishful thinking,
+we decided to assign a short feature ID to each feature and tag every test function with a `/// #feature <ID>` doc comment,
+to achieve a direct, bidirectional, grep-able link between features and their tests,
+accepting that a feature with zero matching greps is a gap to be closed.

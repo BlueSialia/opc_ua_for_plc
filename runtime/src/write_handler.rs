@@ -88,6 +88,11 @@ impl RuntimeWriteHandler {
 }
 
 impl opcua_server::WriteHandler for RuntimeWriteHandler {
+    /// Validate, route, enqueue, and optionally await confirmation for a write request.
+    ///
+    /// Flow: check type compatibility → check writability → look up driver route →
+    /// send the write request via the driver's mpsc channel → wait for confirmation
+    /// (with timeout) and return the result.
     fn handle_write(
         &self,
         req: opcua_server::WriteRequest,

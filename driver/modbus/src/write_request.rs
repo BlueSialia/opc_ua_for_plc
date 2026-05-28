@@ -46,6 +46,7 @@ mod tests {
     use core_model::TagValue as CMTagValue;
     use tokio::sync::oneshot;
 
+    /// #feature DRV-MODBUS
     #[test]
     fn create_and_attach_reply() {
         let req = WriteRequest::new("PLC::Tag1", CMTagValue::UInt16(42));
@@ -57,6 +58,7 @@ mod tests {
         assert!(req2.reply.is_some());
     }
 
+    /// #feature DRV-MODBUS
     #[test]
     fn take_reply_consumes_channel() {
         let mut req = WriteRequest::new("t", CMTagValue::Bool(true));

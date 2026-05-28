@@ -39,6 +39,7 @@ use crate::native::{BridgeWrite, TagDataSource};
 ///   channel, enqueues a `BridgeWrite` (the same way the real `write()`
 ///   callback does), and verifies the bridge-write payload is received
 ///   intact on the other end.
+/// #feature UA-READ, UA-WRITE, UA-TYPES
 #[tokio::test]
 async fn fins_read_write_through_datasource() {
     // -- Arrange: build a FINS-like registry with two D-register tags -----
@@ -105,6 +106,7 @@ async fn fins_read_write_through_datasource() {
 /// Test that `variant_to_tagvalue` correctly converts OPC UA variants for
 /// all scalar types commonly used with Modbus register mappings, and that
 /// the roundtrip `TagValue → Variant → TagValue` is lossless for each type.
+/// #feature UA-TYPES
 #[tokio::test]
 async fn modbus_variant_conversion_all_types() {
     // ----- UInt16 (common Modbus holding register) -----------------------
@@ -221,6 +223,7 @@ async fn modbus_variant_conversion_all_types() {
 /// Additionally, the test verifies that a disconnected reply channel
 /// (processor dropped) results in a `Disconnected` error, and that the
 /// timeout correctly fires when the processor never responds.
+/// #feature UA-WRITE
 #[tokio::test]
 async fn write_confirmation_with_confirmed_ack() {
     // -- Arrange: build a TagDataSource in ConfirmedAck mode -------------
@@ -284,6 +287,7 @@ async fn write_confirmation_with_confirmed_ack() {
 
 /// Negative case: when the reply sender is dropped before acknowledging,
 /// the receiver must get a `Disconnected` error.
+/// #feature UA-WRITE
 #[tokio::test]
 async fn write_confirmation_reply_disconnected() {
     let defs = vec![TagDefinition::new(
@@ -335,6 +339,7 @@ async fn write_confirmation_reply_disconnected() {
 
 /// Negative case: when no one responds within the timeout window, the
 /// receiver gets a `Timeout` error.
+/// #feature UA-WRITE
 #[tokio::test]
 async fn write_confirmation_timeout() {
     let defs = vec![TagDefinition::new(

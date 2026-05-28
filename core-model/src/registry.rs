@@ -109,6 +109,7 @@ mod tests {
     use crate::tag_value::TagDataType;
     use chrono::Utc;
 
+    /// #feature CORE-REGISTRY
     #[test]
     fn registry_from_defs_and_basic_ops() {
         let defs = vec![

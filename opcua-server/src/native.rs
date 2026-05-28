@@ -10,7 +10,7 @@ use open62541::{ObjectNode, VariableNode};
 
 use std::sync::mpsc::{self, Receiver, Sender};
 
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::config::OpcUaConfig;
 use crate::error::ServerError;
@@ -131,6 +131,12 @@ impl TagDataSource {
         }
     }
 
+    fn chrono_to_ua_dt(dt: &chrono::DateTime<chrono::Utc>) -> ua::DateTime {
+        let nanos = dt.timestamp_nanos_opt().unwrap_or(0);
+        ua::DateTime::try_from_unix_timestamp_nanos(i128::from(nanos))
+            .unwrap_or_else(|_| ua::DateTime::try_from_unix_timestamp_nanos(0).unwrap())
+    }
+
     /// Convert an `ua::Variant` into a `TagValue` using an expected TagDataType.
     pub(crate) fn variant_to_tagvalue(
         var: &ua::Variant,
@@ -196,28 +202,35 @@ impl TagDataSource {
 
 impl DataSource for TagDataSource {
     // Called synchronously from the server loop to fulfill a read.
-    //
-    // Follows the documented open62541 DataSource pattern:
-    // set the variant via ctx.set_variant(...) and let the server handle
-    // timestamps/status through the variable node's attribute configuration.
     fn read(&mut self, ctx: &mut DataSourceReadContext) -> DataSourceResult {
         match self.registry.get_tag(&self.tag_id) {
             Ok(tag) => {
                 if let Some(variant) = Self::tagvalue_to_variant(&tag.value) {
-                    // Per open62541 DataSource contract: call set_variant, not set_value.
-                    // The server will populate source/server timestamps and status
-                    // from the variable node attributes.
-                    ctx.set_variant(variant);
+                    // Map Initializing -> GOOD so open62541's
+                    // typeCheckVariableNode (which runs during node
+                    // creation) does not treat non-GOOD as fatal.
+                    let status = if tag.quality == TagQuality::Initializing {
+                        ua::StatusCode::GOOD
+                    } else {
+                        tagquality_to_ua_status(&tag.quality)
+                    };
+
+                    let source_ts = Self::chrono_to_ua_dt(&tag.source_timestamp);
+                    let server_ts = Self::chrono_to_ua_dt(&tag.server_timestamp);
+
+                    let dv = ua::DataValue::new(variant)
+                        .with_status(&status)
+                        .with_source_timestamp(&source_ts)
+                        .with_server_timestamp(&server_ts);
+                    ctx.set_value(dv);
                     Ok(())
                 } else {
-                    // Unsupported type for this DataSource
                     Err(open62541::DataSourceError::from_status_code(
                         ua::StatusCode::BADINTERNALERROR,
                     ))
                 }
             }
             Err(e) => {
-                // Tag missing or other core error
                 debug!("Tag read failed for {}: {}", self.tag_id, e);
                 Err(open62541::DataSourceError::from_status_code(
                     ua::StatusCode::BADINTERNALERROR,
@@ -501,10 +514,16 @@ pub fn start_native_server(
             Duration::from_secs(5),
         );
 
+        let string_node_id = id_str.split(";s=").nth(1).unwrap_or(&id_str);
+        let requested_id = ua::NodeId::string(ns_index, string_node_id);
+        info!(
+            "Creating variable node: tag_id={}, string_id={}, ns_index={}, parent={:?}",
+            id_str, string_node_id, ns_index, plc_node_id
+        );
         let variable_node_id = server
             .add_data_source_variable_node(
                 VariableNode {
-                    requested_new_node_id: None,
+                    requested_new_node_id: Some(requested_id),
                     parent_node_id: plc_node_id.clone(),
                     reference_type_id: organizes_ref.clone(),
                     browse_name: ua::QualifiedName::new(ns_index, browse_name.as_str()),
@@ -521,94 +540,26 @@ pub fn start_native_server(
                 ))
             })?;
 
+        info!(
+            "Created variable node for tag {}: assigned_node_id={:?}",
+            id_str, variable_node_id
+        );
+
         tag_node_map.insert(def.id_str().to_string(), variable_node_id.clone());
     }
 
     let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel::<bool>(false);
     let cfg_clone = cfg.clone();
 
-    // Create a shutdown signal for the tag-change event bridge thread so it
-    // can terminate cleanly when the server stops. We use a watch channel
-    // that is checked during each recv iteration.
-    let (event_bridge_shutdown_tx, event_bridge_shutdown_rx) = std::sync::mpsc::channel::<()>();
-
-    // Spawn event bridge for tag changes from registry.
-    // Use a dedicated shutdown channel because the tag change subscription
-    // blocks on recv() indefinitely without a timeout or select-based wakeup.
-    let event_bridge_thread = if let Ok(rx) =
-        std::panic::catch_unwind(|| registry.tags().subscribe())
-    {
-        let server_writer = server.clone();
-        let tag_map = tag_node_map.clone();
-
-        match std::thread::Builder::new()
-            .name("opcua-tag-event-bridge".into())
-            .spawn(move || {
-                loop {
-                    // Check for shutdown before blocking on recv.
-                    // try_recv is non-blocking and returns Err if no message is available.
-                    match rx.try_recv() {
-                        Ok(change) => {
-                            if let Some(node_id) = tag_map.get(&change.tag_id) {
-                                if let Some(variant) =
-                                    TagDataSource::tagvalue_to_variant(&change.tag.value)
-                                {
-                                    let status = tagquality_to_ua_status(&change.tag.quality);
-
-                                    let mut dv = ua::DataValue::new(variant).with_status(&status);
-
-                                    if let Ok(ua_src) =
-                                        ua::DateTime::try_from_unix_timestamp_nanos(i128::from(
-                                            change
-                                                .tag
-                                                .source_timestamp
-                                                .timestamp_nanos_opt()
-                                                .unwrap_or(0),
-                                        ))
-                                    {
-                                        dv = dv.with_source_timestamp(&ua_src);
-                                    }
-                                    if let Ok(ua_srv) =
-                                        ua::DateTime::try_from_unix_timestamp_nanos(i128::from(
-                                            change
-                                                .tag
-                                                .server_timestamp
-                                                .timestamp_nanos_opt()
-                                                .unwrap_or(0),
-                                        ))
-                                    {
-                                        dv = dv.with_server_timestamp(&ua_srv);
-                                    }
-                                    let _ = server_writer.write_data_value(node_id, &dv);
-                                }
-                            }
-                        }
-                        Err(std::sync::mpsc::TryRecvError::Empty) => {
-                            // No message available; check shutdown signal or sleep briefly.
-                            if event_bridge_shutdown_rx.try_recv().is_ok() {
-                                debug!("tag-event-bridge received shutdown signal");
-                                break;
-                            }
-                            std::thread::sleep(Duration::from_millis(50));
-                        }
-                        Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                            // Channel disconnected; exit gracefully.
-                            debug!("tag-event-bridge subscription disconnected");
-                            break;
-                        }
-                    }
-                }
-                info!("tag-event-bridge thread exiting");
-            }) {
-            Ok(handle) => Some(handle),
-            Err(e) => {
-                warn!("Failed to spawn tag-event-bridge thread: {}", e);
-                None
-            }
-        }
-    } else {
-        None
-    };
+    // Event bridge is disabled: data source nodes serve values through
+    // their read callback. Calling write_data_value on a data source node
+    // triggers the DataSource::write callback, which would write every
+    // registry update back to the PLC — a destructive feedback loop.
+    //
+    // Subscriptions still work: open62541's cyclic monitored-item sampling
+    // calls DataSource::read() on each interval and compares against the
+    // previously stored value. No external push mechanism is needed.
+    let event_bridge_thread: Option<std::thread::JoinHandle<()>> = None;
 
     // Use AtomicBool for cross-thread shutdown signalling with ServerRunner.
     let shutdown_flag = Arc::new(AtomicBool::new(false));
@@ -635,8 +586,6 @@ pub fn start_native_server(
                     if *shutdown_rx.borrow() {
                         info!("Shutdown requested for native OPC UA server; signalling runner");
                         shutdown_flag.store(true, Ordering::Relaxed);
-                        // Signal the tag-event bridge to exit cleanly.
-                        let _ = event_bridge_shutdown_tx.send(());
                         break;
                     }
                 }

@@ -496,9 +496,8 @@ impl FinsDriver {
     }
 
     /// Internal implementation of a single read/write cycle, returning the
-    /// driver-specific `DriverError`. This was extracted from the former trait
-    /// impl so the runtime-facing `ProtocolDriver` adapter can call it and
-    /// convert errors into the boxed `DynDriverError` expected by the runtime.
+    /// driver-specific `DriverError`. The runtime-facing `ProtocolDriver` adapter
+    /// calls this and converts errors into the boxed `DynDriverError`.
     async fn run_read_cycle_impl(&self) -> Result<(), DriverError> {
         {
             let maybe_conn = {
@@ -1008,6 +1007,7 @@ mod tests {
     use core_model::TagValue;
     use std::net::SocketAddr;
 
+    /// #feature DRV-FINS
     #[tokio::test]
     async fn build_and_wrap_frame() {
         let payload = vec![1, 2, 3];
@@ -1015,6 +1015,7 @@ mod tests {
         assert!(wrapped.starts_with(b"FINS"));
     }
 
+    /// #feature DRV-FINS
     #[tokio::test]
     async fn write_request_queue() {
         let cfg = FinsConfig {
@@ -1038,6 +1039,7 @@ mod tests {
         let _ = driver_shutdown_tx;
     }
 
+    /// #feature DRV-FINS
     #[tokio::test]
     async fn validate_and_split_read_groups() {
         // Simple instantiation test to ensure precomputation runs.

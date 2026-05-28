@@ -107,12 +107,14 @@ mod tests {
     use super::*;
     use core_model::WordOrder;
 
+    /// #feature DRV-MODBUS
     #[test]
     fn default_helpers_work() {
         assert_eq!(default_quantity(), 1);
         assert_eq!(default_bit_offset(), 0);
     }
 
+    /// #feature DRV-MODBUS
     #[test]
     fn create_mapping_roundtrip() {
         let m = ModbusMapping::new(
@@ -131,6 +133,7 @@ mod tests {
         assert!(m.writable);
     }
 
+    /// #feature DRV-MODBUS
     #[test]
     fn modbus_function_display() {
         assert_eq!(format!("{}", ModbusFunction::Coils), "Coils");
@@ -141,6 +144,7 @@ mod tests {
     }
 
     #[cfg(feature = "native")]
+    /// #feature DRV-MODBUS
     #[test]
     fn serde_roundtrip() {
         let m = ModbusMapping::new(

@@ -23,7 +23,7 @@ driver_common = { package = "driver-common", path = "../common" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
 
 # Async modbus client (Modbus TCP, async). Version chosen for compatibility with tokio 1.x.
-tokio-modbus = "0.17"
+tokio-modbus = { version = "0.17", features = ["server", "tcp-server"] }
 
 # Utilities & ergonomics
 serde = { version = "1.0", features = ["derive"] }

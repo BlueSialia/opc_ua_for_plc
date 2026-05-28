@@ -1,4 +1,14 @@
-//! Runtime entrypoint.
+//! Runtime entrypoint and orchestrator.
+//!
+//! Startup sequence:
+//! 1. Parse CLI args and load the runtime configuration (TOML or YAML).
+//! 2. Populate the `TagRegistry` from config-defined tags.
+//! 3. Build protocol drivers (`FinsDriver` / `ModbusDriver`) per PLC config.
+//! 4. Wire up write routing (tag → driver sender) for OPC UA write forwarding.
+//! 5. Start a health-event drain loop.
+//! 6. Start the OPC UA server.
+//! 7. Start all driver pollers.
+//! 8. Wait for SIGTERM / Ctrl+C and perform graceful shutdown.
 
 #![warn(missing_docs)]
 
@@ -10,6 +20,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
+use tokio::net::lookup_host;
 use tokio::signal;
 use tokio::sync::{mpsc, watch};
 use tracing::{info, warn};
@@ -111,10 +122,18 @@ async fn main() -> Result<()> {
     for plc in cfg.plcs {
         match plc.protocol.to_lowercase().as_str() {
             "fins" => {
-                let endpoint: SocketAddr = plc
-                    .endpoint
-                    .parse()
-                    .map_err(|e| anyhow!("Invalid endpoint for {}: {}", plc.name, e))?;
+                let endpoint: SocketAddr = lookup_host(&plc.endpoint)
+                    .await
+                    .map_err(|e| {
+                        anyhow!(
+                            "Failed to resolve endpoint {} for {}: {}",
+                            plc.endpoint,
+                            plc.name,
+                            e
+                        )
+                    })?
+                    .next()
+                    .ok_or_else(|| anyhow!("No addresses found for {}", plc.endpoint))?;
                 let mut mappings = Vec::new();
                 for t in &plc.tags {
                     let m = tagconfig_to_fins_mapping(t).with_context(|| {
@@ -163,10 +182,18 @@ async fn main() -> Result<()> {
                 drivers.push(runtime_drv.clone());
             }
             "modbus" => {
-                let endpoint: SocketAddr = plc
-                    .endpoint
-                    .parse()
-                    .map_err(|e| anyhow!("Invalid endpoint for {}: {}", plc.name, e))?;
+                let endpoint: SocketAddr = lookup_host(&plc.endpoint)
+                    .await
+                    .map_err(|e| {
+                        anyhow!(
+                            "Failed to resolve endpoint {} for {}: {}",
+                            plc.endpoint,
+                            plc.name,
+                            e
+                        )
+                    })?
+                    .next()
+                    .ok_or_else(|| anyhow!("No addresses found for {}", plc.endpoint))?;
                 let mut mappings = Vec::new();
                 for t in &plc.tags {
                     let m = tagconfig_to_modbus_mapping(t).with_context(|| {

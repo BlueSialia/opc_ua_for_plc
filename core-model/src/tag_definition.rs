@@ -122,12 +122,14 @@ mod tests {
     use super::*;
     use crate::tag_value::TagDataType;
 
+    /// #feature CORE-DEF
     #[test]
     fn validate_ok() {
         let def = TagDefinition::new("ns=1;s=test", "Test", "D100", TagDataType::UInt16);
         assert!(def.validate().is_ok());
     }
 
+    /// #feature CORE-DEF
     #[test]
     fn validate_empty_id() {
         let def = TagDefinition::new("", "Test", "D100", TagDataType::UInt16);
@@ -137,6 +139,7 @@ mod tests {
         }
     }
 
+    /// #feature CORE-DEF
     #[test]
     fn validate_empty_name() {
         let def = TagDefinition::new("id", "", "D100", TagDataType::UInt16);
@@ -146,6 +149,7 @@ mod tests {
         }
     }
 
+    /// #feature CORE-DEF
     #[test]
     fn validate_empty_address() {
         let def = TagDefinition::new("id", "Name", "", TagDataType::UInt16);
@@ -155,6 +159,7 @@ mod tests {
         }
     }
 
+    /// #feature CORE-DEF
     #[test]
     fn constructor_and_helpers() {
         let d = TagDefinition::new("a", "A", "addr", TagDataType::UInt16);

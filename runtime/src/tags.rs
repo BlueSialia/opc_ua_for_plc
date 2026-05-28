@@ -249,6 +249,7 @@ mod tests {
     use super::*;
     use core_model::WordOrder;
 
+    /// #feature CORE-REGISTRY
     #[test]
     fn convert_definition_ok() {
         let t = TagConfig {
@@ -267,6 +268,7 @@ mod tests {
         assert_eq!(def.plc_name.as_ref().map(|a| a.as_ref()), Some("PLC1"));
     }
 
+    /// #feature DRV-FINS
     #[test]
     fn fins_mapping_parsing() {
         let t = TagConfig {
@@ -286,6 +288,7 @@ mod tests {
         assert_eq!(m.byte_order, WordOrder::CDAB);
     }
 
+    /// #feature DRV-FINS
     #[test]
     fn fins_mapping_explicit_area() {
         let t = TagConfig {
@@ -303,6 +306,7 @@ mod tests {
         assert_eq!(m.address, 50);
     }
 
+    /// #feature DRV-MODBUS
     #[test]
     fn modbus_mapping_parsing() {
         let t = TagConfig {

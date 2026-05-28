@@ -89,8 +89,13 @@ fn default_u32_1000() -> u32 {
 /// PLC configuration block.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlcConfig {
+    /// Logical name for the PLC (used in logs, health events, and OPC UA browse folders).
     pub name: String,
+
+    /// Protocol identifier: `"fins"` or `"modbus"`.
     pub protocol: String,
+
+    /// Host:port endpoint for the PLC (e.g. `"192.168.1.10:9600"`).
     pub endpoint: String,
 
     /// Modbus unit/slave id (1-255). Required for Modbus protocol.

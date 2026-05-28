@@ -47,6 +47,7 @@ impl DriverError {
 mod tests {
     use super::*;
 
+    /// #feature DRV-FINS
     #[test]
     fn display_variants() {
         assert_eq!(format!("{}", DriverError::Timeout), "Timeout");
@@ -61,6 +62,7 @@ mod tests {
         assert_eq!(format!("{}", DriverError::other("boom")), "Other: boom");
     }
 
+    /// #feature DRV-FINS
     #[test]
     fn from_io_error() {
         let io = std::io::Error::other("network down");
