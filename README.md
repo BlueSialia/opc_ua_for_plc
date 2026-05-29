@@ -32,7 +32,6 @@ Test functions are tagged with `#feature <ID>`.
 
 - [x] `UA-OBJ` — Object Nodes
 - [x] `UA-VAR` — Variable Nodes
-- [ ] `UA-METHOD` — Method Nodes
 - [x] `UA-REF` — Reference Types (Organizes)
 - [x] `UA-BROWSE` — Hierarchical Browse structure
 - [x] `UA-NS` — Custom Namespaces
