@@ -8,7 +8,6 @@ repository = "https://github.com/BlueSialia/opc_ua_for_plc"
 documentation = "https://github.com/BlueSialia/opc_ua_for_plc/blob/main/driver/modbus"
 authors = ["Jorge Domínguez Arnáez (BlueSialia) <bluesialia@gmail.com>"]
 readme = "../../README.md"
-publish = false
 
 [lib]
 name = "driver_modbus"

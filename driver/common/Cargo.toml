@@ -7,7 +7,6 @@ license = "Hippocratic License 3.0"
 repository = "https://github.com/BlueSialia/opc_ua_for_plc"
 documentation = "https://github.com/BlueSialia/opc_ua_for_plc/blob/main/driver/common"
 readme = "../../README.md"
-publish = false
 authors = ["Jorge Domínguez Arnáez (BlueSialia) <bluesialia@gmail.com>"]
 
 [lib]

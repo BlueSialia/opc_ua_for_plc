@@ -10,5 +10,30 @@ pr_draft = false
 allow_dirty = false
 repo_url = "https://github.com/BlueSialia/opc_ua_for_plc"
 
-# Since crates use publish = false, release-plz won't publish to crates.io.
-# We only use it for changelog generation, version bumping, and GitHub releases.
+# All packages write to a single root CHANGELOG.md.
+# Crates are workspace-internal and not published to crates.io.
+# release-plz handles changelog generation, version bumping, and GitHub releases only.
+
+[[package]]
+name = "core-model"
+changelog_path = "../CHANGELOG.md"
+
+[[package]]
+name = "driver-common"
+changelog_path = "../../CHANGELOG.md"
+
+[[package]]
+name = "driver-fins"
+changelog_path = "../../CHANGELOG.md"
+
+[[package]]
+name = "driver-modbus"
+changelog_path = "../../CHANGELOG.md"
+
+[[package]]
+name = "opcua-server"
+changelog_path = "../CHANGELOG.md"
+
+[[package]]
+name = "runtime"
+changelog_path = "../CHANGELOG.md"

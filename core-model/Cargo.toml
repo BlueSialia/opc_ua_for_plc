@@ -8,8 +8,6 @@ repository = "https://github.com/BlueSialia/opc_ua_for_plc"
 authors = ["Jorge Domínguez Arnáez (BlueSialia) <bluesialia@gmail.com>"]
 documentation = "https://github.com/BlueSialia/opc_ua_for_plc/blob/main/core-model"
 readme = "../README.md"
-publish = false
-
 [lib]
 name = "core_model"
 path = "src/lib.rs"
