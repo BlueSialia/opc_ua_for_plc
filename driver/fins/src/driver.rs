@@ -207,6 +207,7 @@ impl FinsDriver {
         bytes
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn decode_fixed<T>(
         &self,
         mapping: &TagMapping,

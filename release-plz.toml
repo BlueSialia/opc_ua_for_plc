@@ -2,13 +2,9 @@
 # See: https://release-plz.ieni.dev/
 
 [workspace]
-changelog_update = true
-git_release_enable = true
-git_release_type = "prod"
-git_tag_enable = true
-pr_draft = false
-allow_dirty = false
-repo_url = "https://github.com/BlueSialia/opc_ua_for_plc"
+git_release_type = "auto"
+git_only = true
+release_always = false
 
 # All packages write to a single root CHANGELOG.md.
 # Crates are workspace-internal and not published to crates.io.
