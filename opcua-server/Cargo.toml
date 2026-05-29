@@ -27,7 +27,8 @@ serde = { version = "1.0", features = ["derive"] }
 
 # Native Open62541 binding. This crate requires the native open62541 Rust crate
 # and associated native toolchain to build and run the production OPC UA server.
-open62541 = "0.10.1"
+# The mbedtls feature enables TLS/certificate-based security (encrypted channels).
+open62541 = { version = "0.10.1", features = ["mbedtls"] }
 
 # For graceful shutdown coordination and select-style futures
 futures = "0.3"

@@ -23,7 +23,7 @@ Test functions are tagged with `#feature <ID>`.
 ### Protocol & Transport
 
 - [x] `UA-TCP` — UA-TCP Binary Protocol (`opc.tcp`)
-- [ ] `UA-SECURE-CONV` — UA-SecureConversation (encrypted channels)
+- [x] `UA-SECURE-CONV` — UA-SecureConversation (encrypted channels)
 - [ ] `UA-HTTPS` — HTTPS/SOAP Web Services transport
 - [ ] `UA-REV-CONN` — Reverse Connect
 - [ ] `UA-PUBSUB` — PubSub (MQTT / AMQP / UDP)
@@ -62,9 +62,9 @@ Test functions are tagged with `#feature <ID>`.
 ### Security
 
 - [x] `UA-SEC-NONE` — None Security Mode
-- [ ] `UA-SEC-SIGN` — Sign Security Mode
-- [ ] `UA-SEC-ENCRYPT` — SignAndEncrypt Security Mode
-- [ ] `UA-SEC-POLICIES` — Security Policies (Basic128Rsa15, Basic256, Basic256Sha256)
+- [x] `UA-SEC-SIGN` — Sign Security Mode
+- [x] `UA-SEC-ENCRYPT` — SignAndEncrypt Security Mode
+- [x] `UA-SEC-POLICIES` — Security Policies (Basic128Rsa15, Basic256, Basic256Sha256)
 - [x] `UA-AUTH-ANON` — Anonymous Authentication
 - [x] `UA-AUTH-PASS` — Username / Password Authentication
 - [ ] `UA-AUTH-CERT` — X.509 Certificate Authentication

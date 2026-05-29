@@ -277,4 +277,27 @@ mod tests {
             other => panic!("unexpected error: {:?}", other),
         }
     }
+
+    /// Verify that every `SecurityPolicy` variant maps to the correct well-known
+    /// OPC UA policy URI as defined by the OPC Foundation.
+    /// #feature UA-SEC-POLICIES
+    #[test]
+    fn security_policy_uris_are_correct() {
+        assert_eq!(
+            SecurityPolicy::None.uri(),
+            "http://opcfoundation.org/UA/SecurityPolicy#None"
+        );
+        assert_eq!(
+            SecurityPolicy::Basic128Rsa15.uri(),
+            "http://opcfoundation.org/UA/SecurityPolicy#Basic128Rsa15"
+        );
+        assert_eq!(
+            SecurityPolicy::Basic256.uri(),
+            "http://opcfoundation.org/UA/SecurityPolicy#Basic256"
+        );
+        assert_eq!(
+            SecurityPolicy::Basic256Sha256.uri(),
+            "http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256"
+        );
+    }
 }

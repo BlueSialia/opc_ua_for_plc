@@ -218,10 +218,6 @@ we decided to enable OPC UA secure channels with encryption and certificate-base
 to achieve confidentiality and integrity of OPC UA communications,
 accepting the complexity of certificate management and user provisioning.
 
-Note: the configuration schema and validation are in place, but enforcement at the open62541
-stack level is not yet wired — currently the server validates security settings at startup
-and logs the intended mode. Full secure-channel enforcement is planned.
-
 ### PLC Protocol Security
 
 In the context of the inherently insecure PLC protocols,

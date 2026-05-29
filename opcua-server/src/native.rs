@@ -339,11 +339,72 @@ pub fn start_native_server(
     write_handler: WriteHandlerArc,
     login_cb: Option<crate::LoginCallback>,
 ) -> Result<crate::types::ServerHandle, ServerError> {
-    // Build ServerBuilder so we can configure endpoints and access control.
-    let mut builder = open62541::ServerBuilder::default();
+    // Determine the endpoint URL before constructing the builder.
+    let endpoint = format!("opc.tcp://{}:{}", cfg.bind_addr, cfg.port);
+
+    // Build ServerBuilder with or without security policies.
+    let mut builder = if cfg.security_mode != crate::config::SecurityMode::None {
+        // Security enabled: load certificate and private key from disk.
+        let cert_path = cfg
+            .certificates
+            .server_certificate_path
+            .as_deref()
+            .ok_or_else(|| {
+                ServerError::Config(
+                    "server_certificate_path is required when security_mode is not None".into(),
+                )
+            })?;
+        let key_path = cfg
+            .certificates
+            .server_private_key_path
+            .as_deref()
+            .ok_or_else(|| {
+                ServerError::Config(
+                    "server_private_key_path is required when security_mode is not None".into(),
+                )
+            })?;
+
+        let cert_bytes = std::fs::read(cert_path).map_err(|e| {
+            ServerError::Config(format!("Failed to read certificate '{}': {}", cert_path, e))
+        })?;
+        let key_bytes = std::fs::read(key_path).map_err(|e| {
+            ServerError::Config(format!("Failed to read private key '{}': {}", key_path, e))
+        })?;
+
+        let certificate = open62541::Certificate::from_bytes(&cert_bytes);
+        let private_key = open62541::PrivateKey::from_bytes(&key_bytes);
+
+        let mut b = open62541::ServerBuilder::default_with_security_policies(
+            cfg.port,
+            &certificate,
+            &private_key,
+        )
+        .map_err(|e| {
+            ServerError::Backend(format!("Failed to initialize security policies: {}", e))
+        })?;
+
+        if cfg.certificates.trust_store_dir.is_none() {
+            b = b.accept_all();
+        }
+
+        let policy_uri = cfg.security_policy.uri();
+        info!(
+            "OPC UA security enabled: mode={:?}, policy={}, server-cert={}, trust-store={}",
+            cfg.security_mode,
+            policy_uri,
+            cert_path,
+            cfg.certificates
+                .trust_store_dir
+                .as_deref()
+                .unwrap_or("none (accept-all)"),
+        );
+
+        b
+    } else {
+        open62541::ServerBuilder::default()
+    };
 
     // Set the server endpoint URL from configuration.
-    let endpoint = format!("opc.tcp://{}:{}", cfg.bind_addr, cfg.port);
     builder = builder.server_urls(&[endpoint.as_str()]);
 
     // Configure access control: username/password callback or anonymous-only.
@@ -363,22 +424,6 @@ pub fn start_native_server(
         builder = builder
             .access_control(access)
             .map_err(|e| ServerError::Backend(format!("Failed to apply access control: {}", e)))?;
-    }
-
-    // Apply security configuration: security mode, policy, and certificates.
-    //
-    // The security mode and policy are validated at the runtime config layer
-    // (see runtime/src/main.rs) which rejects unknown values at startup.
-    // open62541 0.10.1 does not expose a direct `endpoints` method on the
-    // ServerBuilder; security enforcement at the stack level requires
-    // constructing the ServerConfig with the appropriate policies before
-    // building. For now, we validate the config and log the intended settings.
-    if cfg.security_mode != crate::config::SecurityMode::None {
-        let policy_uri = cfg.security_policy.uri();
-        info!(
-            "OPC UA security configured: mode={:?}, policy={}, endpoint={}",
-            cfg.security_mode, policy_uri, endpoint
-        );
     }
 
     // Build the server and runner from the builder.
