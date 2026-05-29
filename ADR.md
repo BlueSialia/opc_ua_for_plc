@@ -281,3 +281,14 @@ facing the inability to verify which features are genuinely supported versus wis
 we decided to assign a short feature ID to each feature and tag every test function with a `/// #feature <ID>` doc comment,
 to achieve a direct, bidirectional, grep-able link between features and their tests,
 accepting that a feature with zero matching greps is a gap to be closed.
+
+### Consistent Test Location Convention
+
+In the context of maintaining a multi-crate workspace with unit, integration, and end-to-end tests,
+facing tests scattered across separate test modules and integration test directories with no clear rule,
+we decided to enforce a uniform convention across all crates:
+unit tests live inline as `#[cfg(test)] mod tests { ... }` blocks in the same `src/*.rs` file as the code they test;
+integration tests live in `tests/*.rs` at the crate root and access only the public API;
+end-to-end tests live in the workspace `e2e-tests/` directory using Docker Compose,
+to achieve location predictability,
+accepting that integration tests requiring `pub(crate)` internals must either have those internals made public or be moved to inline unit tests alongside the types they exercise.

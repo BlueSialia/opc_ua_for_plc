@@ -18,9 +18,6 @@ mod native;
 mod types;
 mod writes;
 
-#[cfg(test)]
-mod tests;
-
 /// Login callback invoked by the OPC UA access control plugin.
 ///
 /// The callback receives the provided username and password blob and should
