@@ -66,6 +66,26 @@ we decided to use an asynchronous write pipeline where the OPC UA server enqueue
 to achieve high responsiveness and decoupling of network latencies,
 accepting the need for managing write confirmation via oneshot reply channels.
 
+### Write Confirmation Modes
+
+In the context of acknowledging OPC UA client writes back through protocol drivers,
+facing the tradeoff between low-latency responses and end-to-end reliability,
+we decided to support two write acknowledgement modes — `QueuedAck` (accept as soon as the request
+is enqueued to the driver) and `ConfirmedAck` (wait for the driver to confirm the write reached the PLC),
+to achieve deployment flexibility: `ConfirmedAck` for production safety and `QueuedAck` for
+scenarios where write latency is more critical than confirmation,
+accepting the need for oneshot reply channels and configurable timeouts in the `ConfirmedAck` path.
+
+### Sync-to-Async Write Bridge via Dedicated Thread
+
+In the context of integrating with the `open62541` C library,
+facing its synchronous `DataSource::write` callback that cannot directly await async Rust futures,
+we decided to spawn a dedicated `std::thread` ("opcua-write-bridge") that receives writes via
+a blocking `mpsc` channel, blocks on the Tokio runtime handle to await the async `WriteHandler`,
+and sends the result back through the same channel,
+to achieve a clean separation between the synchronous FFI boundary and the fully async write path,
+accepting the overhead of a long-lived OS thread and the need to catch panics at the thread boundary.
+
 ### Rich Quality Semantics
 
 In the context of diagnosing communication issues in industrial networks,
@@ -140,9 +160,9 @@ accepting slightly longer startup times and more rigorous configuration requirem
 
 In the context of deploying to mixed Modbus production environments with multiple slaves behind gateways,
 facing the risk of addressing the wrong device when unit_id is hardcoded to 1,
-we decided to make the Modbus unit/slave id an explicit mandatory field in `PlcConfig`,
-to achieve deterministic device addressing in multi-slave environments,
-accepting that integrators must now explicitly set unit_id per PLC in configuration,
+we decided to make the Modbus unit/slave id an explicit `Option<u8>` field in `PlcConfig` defaulting to `None`,
+to achieve deterministic device addressing in multi-slave environments while keeping FINS configurations clean,
+accepting that Modbus integrators must explicitly set `unit_id` per PLC and that the runtime falls back to 1 when omitted,
 because `Slave::tcp_device()` is always 255 and the correct unit id depends on the physical device addressing scheme.
 
 ### Explicit FINS Memory-Area Rules
@@ -197,6 +217,10 @@ facing potential eavesdropping or tampering,
 we decided to enable OPC UA secure channels with encryption and certificate-based authentication,
 to achieve confidentiality and integrity of OPC UA communications,
 accepting the complexity of certificate management and user provisioning.
+
+Note: the configuration schema and validation are in place, but enforcement at the open62541
+stack level is not yet wired — currently the server validates security settings at startup
+and logs the intended mode. Full secure-channel enforcement is planned.
 
 ### PLC Protocol Security
 
