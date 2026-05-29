@@ -83,7 +83,7 @@ mod tests {
         // use default health()
     }
 
-    /// #feature RUNTIME
+    /// #feature DRV-MODBUS, UA-TYPES
     #[tokio::test]
     async fn dummy_driver_runs() {
         let d = DummyDriver;

@@ -84,10 +84,6 @@ impl TagStore {
     /// Insert or replace a runtime `Tag` under `id`.
     ///
     /// If `id` exists the per-tag `ArcSwap` is reused and its value replaced atomically.
-    ///
-    /// For ergonomics we accept any `impl Into<String>` (string literals, `String`, ...)
-    /// and internally store the id as `Arc<str>` to reduce allocations when many
-    /// ids share identical strings.
     #[instrument(skip(self, id, tag))]
     pub fn insert(&self, id: impl Into<String>, tag: Tag) {
         let id_owned = id.into();
@@ -280,7 +276,7 @@ mod tests {
     use super::*;
     use crate::tag_value::TagValue;
 
-    /// #feature CORE-STORE
+    /// #feature UA-READ
     #[test]
     fn insert_and_get() {
         let store = TagStore::new();
@@ -289,7 +285,7 @@ mod tests {
         assert_eq!(*t.value, TagValue::UInt16(1));
     }
 
-    /// #feature CORE-STORE
+    /// #feature UA-READ
     #[test]
     fn update_and_snapshot() {
         let store = TagStore::new();
@@ -308,7 +304,7 @@ mod tests {
         assert_eq!(*s.value, TagValue::Float(std::f32::consts::PI));
     }
 
-    /// #feature CORE-STORE
+    /// #feature UA-WRITE
     #[test]
     fn try_update_with_applies_changes() {
         let store = TagStore::new();

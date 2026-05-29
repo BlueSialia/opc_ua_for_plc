@@ -249,7 +249,7 @@ mod tests {
     use super::*;
     use core_model::WordOrder;
 
-    /// #feature CORE-REGISTRY
+    /// #feature UA-ACCESS
     #[test]
     fn convert_definition_ok() {
         let t = TagConfig {
@@ -265,7 +265,7 @@ mod tests {
         let def = tagconfig_to_definition(&t, "PLC1").expect("convert");
         assert_eq!(def.id.as_ref(), "T");
         assert!(def.writable);
-        assert_eq!(def.plc_name.as_ref().map(|a| a.as_ref()), Some("PLC1"));
+        assert_eq!(def.plc_name.as_ref(), "PLC1");
     }
 
     /// #feature DRV-FINS

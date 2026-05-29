@@ -109,12 +109,12 @@ mod tests {
     use crate::tag_value::TagDataType;
     use chrono::Utc;
 
-    /// #feature CORE-REGISTRY
+    /// #feature UA-READ, UA-WRITE
     #[test]
     fn registry_from_defs_and_basic_ops() {
         let defs = vec![
-            TagDefinition::new("ns=1;s=a", "A", "D100", TagDataType::UInt16),
-            TagDefinition::new("ns=1;s=b", "B", "D101", TagDataType::Float),
+            TagDefinition::new("ns=1;s=a", "A", "D100", TagDataType::UInt16, "PLC"),
+            TagDefinition::new("ns=1;s=b", "B", "D101", TagDataType::Float, "PLC"),
         ];
 
         let reg = TagRegistry::from_definitions(&defs).expect("build registry");

@@ -45,11 +45,10 @@ pub struct TagDefinition {
     #[serde(default)]
     pub metadata: Option<serde_json::Value>,
 
-    /// Optional PLC name that owns this tag. When set, the OPC UA server uses
-    /// this to organize tags into PLC folders instead of parsing the tag id.
-    /// If absent, the server falls back to deriving the PLC group from the id.
-    #[serde(default, with = "crate::arcstr_serde::option")]
-    pub plc_name: Option<Arc<str>>,
+    /// PLC name that owns this tag. Used by the OPC UA server to organize
+    /// tags into PLC folders.
+    #[serde(with = "crate::arcstr_serde")]
+    pub plc_name: Arc<str>,
 }
 
 impl TagDefinition {
@@ -82,6 +81,7 @@ impl TagDefinition {
         name: impl Into<String>,
         address: impl Into<String>,
         data_type: TagDataType,
+        plc_name: impl Into<Arc<str>>,
     ) -> Self {
         TagDefinition {
             id: Arc::from(id.into()),
@@ -92,7 +92,7 @@ impl TagDefinition {
             byte_order: WordOrder::default(),
             stale_after_ms: None,
             metadata: None,
-            plc_name: None,
+            plc_name: plc_name.into(),
         }
     }
 
@@ -122,47 +122,47 @@ mod tests {
     use super::*;
     use crate::tag_value::TagDataType;
 
-    /// #feature CORE-DEF
+    /// #feature UA-ACCESS
     #[test]
     fn validate_ok() {
-        let def = TagDefinition::new("ns=1;s=test", "Test", "D100", TagDataType::UInt16);
+        let def = TagDefinition::new("ns=1;s=test", "Test", "D100", TagDataType::UInt16, "PLC");
         assert!(def.validate().is_ok());
     }
 
-    /// #feature CORE-DEF
+    /// #feature UA-ACCESS
     #[test]
     fn validate_empty_id() {
-        let def = TagDefinition::new("", "Test", "D100", TagDataType::UInt16);
+        let def = TagDefinition::new("", "Test", "D100", TagDataType::UInt16, "PLC");
         match def.validate() {
             Err(CoreError::InvalidConfig(_)) => {}
             other => panic!("expected InvalidConfig, got {:?}", other),
         }
     }
 
-    /// #feature CORE-DEF
+    /// #feature UA-ACCESS
     #[test]
     fn validate_empty_name() {
-        let def = TagDefinition::new("id", "", "D100", TagDataType::UInt16);
+        let def = TagDefinition::new("id", "", "D100", TagDataType::UInt16, "PLC");
         match def.validate() {
             Err(CoreError::InvalidConfig(_)) => {}
             other => panic!("expected InvalidConfig, got {:?}", other),
         }
     }
 
-    /// #feature CORE-DEF
+    /// #feature UA-ACCESS
     #[test]
     fn validate_empty_address() {
-        let def = TagDefinition::new("id", "Name", "", TagDataType::UInt16);
+        let def = TagDefinition::new("id", "Name", "", TagDataType::UInt16, "PLC");
         match def.validate() {
             Err(CoreError::InvalidConfig(_)) => {}
             other => panic!("expected InvalidConfig, got {:?}", other),
         }
     }
 
-    /// #feature CORE-DEF
+    /// #feature UA-ACCESS
     #[test]
     fn constructor_and_helpers() {
-        let d = TagDefinition::new("a", "A", "addr", TagDataType::UInt16);
+        let d = TagDefinition::new("a", "A", "addr", TagDataType::UInt16, "PLC");
         assert_eq!(d.id_str(), "a");
         assert_eq!(d.name_str(), "A");
         assert_eq!(d.address_str(), "addr");

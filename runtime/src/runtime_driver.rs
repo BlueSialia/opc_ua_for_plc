@@ -238,7 +238,7 @@ impl RuntimeDriver {
     fn check_stale_tags(plc_name: &str, registry: &TagRegistry) {
         use tracing::trace;
         for def in registry.all_definitions_sorted() {
-            if def.plc_name.as_ref().map(|n| n.as_ref()) != Some(plc_name) {
+            if def.plc_name.as_ref() != plc_name {
                 continue;
             }
             let timeout_ms = match def.stale_after_ms() {
@@ -292,7 +292,7 @@ mod tests {
         }
     }
 
-    /// #feature RUNTIME
+    /// #feature DRV-MODBUS
     #[tokio::test]
     async fn runtime_driver_start_stop() {
         let proto = Arc::new(DummyProtoDriver) as Arc<dyn ProtocolDriver>;
@@ -302,6 +302,7 @@ mod tests {
             "t1",
             "D100",
             core_model::TagDataType::UInt16,
+            "test-plc",
         )];
         let registry =
             Arc::new(core_model::TagRegistry::from_definitions(&defs).expect("build registry"));

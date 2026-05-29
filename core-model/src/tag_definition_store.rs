@@ -65,12 +65,12 @@ mod tests {
     use super::*;
     use crate::tag_value::TagDataType;
 
-    /// #feature CORE-DEF
+    /// #feature UA-ACCESS
     #[test]
     fn create_and_query_store() {
         let defs = vec![
-            TagDefinition::new("a", "A", "D100", TagDataType::UInt16),
-            TagDefinition::new("b", "B", "D102", TagDataType::Float),
+            TagDefinition::new("a", "A", "D100", TagDataType::UInt16, "PLC"),
+            TagDefinition::new("b", "B", "D102", TagDataType::Float, "PLC"),
         ];
 
         let store = TagDefinitionStore::from_definitions(&defs).expect("build store");
@@ -87,12 +87,12 @@ mod tests {
         assert_eq!(ids, vec!["a".to_string(), "b".to_string()]);
     }
 
-    /// #feature CORE-DEF
+    /// #feature UA-ACCESS
     #[test]
     fn duplicate_definition_fails() {
         let defs = vec![
-            TagDefinition::new("a", "A", "D100", TagDataType::UInt16),
-            TagDefinition::new("a", "A2", "D200", TagDataType::UInt16),
+            TagDefinition::new("a", "A", "D100", TagDataType::UInt16, "PLC"),
+            TagDefinition::new("a", "A2", "D200", TagDataType::UInt16, "PLC"),
         ];
         let res = TagDefinitionStore::from_definitions(&defs);
         assert!(res.is_err());

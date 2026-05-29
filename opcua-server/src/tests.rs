@@ -44,8 +44,20 @@ use crate::native::{BridgeWrite, TagDataSource};
 async fn fins_read_write_through_datasource() {
     // -- Arrange: build a FINS-like registry with two D-register tags -----
     let defs = vec![
-        TagDefinition::new("ns=1;s=fins.D100", "PLC1.D100", "D100", TagDataType::UInt16),
-        TagDefinition::new("ns=1;s=fins.D101", "PLC1.D101", "D101", TagDataType::Float),
+        TagDefinition::new(
+            "ns=1;s=fins.D100",
+            "PLC1.D100",
+            "D100",
+            TagDataType::UInt16,
+            "PLC1",
+        ),
+        TagDefinition::new(
+            "ns=1;s=fins.D101",
+            "PLC1.D101",
+            "D101",
+            TagDataType::Float,
+            "PLC1",
+        ),
     ];
     let registry = Arc::new(TagRegistry::from_definitions(&defs).expect("build registry"));
 
@@ -232,6 +244,7 @@ async fn write_confirmation_with_confirmed_ack() {
         "ConfirmTag",
         "W200",
         TagDataType::UInt16,
+        "PLC",
     )];
     let registry = Arc::new(TagRegistry::from_definitions(&defs).expect("build registry"));
 
@@ -295,6 +308,7 @@ async fn write_confirmation_reply_disconnected() {
         "DropTag",
         "W300",
         TagDataType::UInt16,
+        "PLC",
     )];
     let registry = Arc::new(TagRegistry::from_definitions(&defs).expect("build registry"));
 
@@ -347,6 +361,7 @@ async fn write_confirmation_timeout() {
         "SlowTag",
         "W400",
         TagDataType::UInt16,
+        "PLC",
     )];
     let registry = Arc::new(TagRegistry::from_definitions(&defs).expect("build registry"));
 

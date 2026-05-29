@@ -1053,6 +1053,7 @@ mod tests {
             "tag1",
             "ADDR1",
             TagDataType::UInt16,
+            "test-modbus",
         )];
         let registry =
             Arc::new(core_model::TagRegistry::from_definitions(&defs).expect("build registry"));

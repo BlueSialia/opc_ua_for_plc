@@ -46,9 +46,7 @@ pub struct FinsDriver {
     write_rx: Arc<Mutex<mpsc::Receiver<WriteRequest>>>,
     /// Session id counter (atomic u8 to avoid async mutex contention).
     sid_counter: Arc<AtomicU8>,
-    /// Connection guard — keep as an async Mutex around an Option to allow
-    /// single-owner access without an outer Arc<Mutex<..>> which can cause
-    /// deadlocks when combined with other locks.
+    /// Connection guard.
     conn: Mutex<Option<TcpStream>>,
     /// Precomputed read groups derived from `config.mappings`.
     read_groups: Vec<ReadGroup>,
