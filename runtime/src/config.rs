@@ -97,11 +97,10 @@ pub struct PlcConfig {
     /// Host:port endpoint for the PLC (e.g. `"192.168.1.10:9600"`).
     pub endpoint: String,
 
-    /// Modbus unit/slave id (1-255). Required for Modbus protocol.
-    /// Defaults to 1 for backward compatibility, but should be set explicitly
-    /// in production to target the correct device in multi-slave environments.
-    #[serde(default = "default_unit_id")]
-    pub unit_id: u8,
+    /// Modbus unit/slave id (1-255). Required for Modbus protocol, ignored for FINS.
+    /// When absent for Modbus, defaults to 1.
+    #[serde(default)]
+    pub unit_id: Option<u8>,
 
     #[serde(default = "default_cycle_ms")]
     pub cycle_ms: u64,
@@ -111,10 +110,6 @@ pub struct PlcConfig {
 
     #[serde(default)]
     pub max_words_per_request: Option<u32>,
-}
-
-fn default_unit_id() -> u8 {
-    1
 }
 
 fn default_cycle_ms() -> u64 {

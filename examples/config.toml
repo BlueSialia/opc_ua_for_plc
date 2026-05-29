@@ -44,7 +44,7 @@ write_mode = "ConfirmedAck"
 #   protocol     - "fins" or "modbus"
 #   endpoint     - TCP socket address (host:port)
 #   cycle_ms     - poll interval in milliseconds (min 10)
-#   unit_id      - Modbus slave/unit id (1-255); required for Modbus, ignored for FINS
+#   unit_id      - Modbus slave/unit id (1-255); Ignored for FINS.
 #   max_words_per_request - (FINS only) max words per read/write command (default 960)
 #
 # Fields per tag:

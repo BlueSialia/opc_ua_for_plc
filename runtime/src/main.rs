@@ -198,7 +198,7 @@ async fn main() -> Result<()> {
                 let modbus_cfg = ModbusConfigInternal {
                     name: plc.name.clone(),
                     endpoint,
-                    unit_id: plc.unit_id,
+                    unit_id: plc.unit_id.unwrap_or(1),
                     cycle_ms: plc.cycle_ms,
                     mappings,
                     keepalive_secs: 30,
