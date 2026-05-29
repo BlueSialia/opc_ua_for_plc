@@ -7,8 +7,7 @@ use thiserror::Error;
 /// Top-level runtime configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeConfig {
-    #[serde(default)]
-    pub opcua: Option<OpcUaConfig>,
+    pub opcua: OpcUaConfig,
 
     #[serde(default)]
     pub plcs: Vec<PlcConfig>,

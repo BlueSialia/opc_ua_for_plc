@@ -166,7 +166,7 @@ impl TestModbusServer {
 fn make_registry(defs: &[(&str, TagDataType)]) -> Arc<TagRegistry> {
     let defs: Vec<_> = defs
         .iter()
-        .map(|(id, dt)| core_model::TagDefinition::new(*id, *id, "ignored", dt.clone()))
+        .map(|(id, dt)| core_model::TagDefinition::new(*id, *id, "ignored", dt.clone(), "test-plc"))
         .collect();
     Arc::new(TagRegistry::from_definitions(&defs).expect("valid defs"))
 }
@@ -177,9 +177,8 @@ fn make_driver(
     mappings: Vec<ModbusMapping>,
     registry: Arc<TagRegistry>,
 ) -> ModbusDriver {
-    let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
     let config = ModbusConfig::new("test-plc", addr, unit_id, 100, mappings);
-    ModbusDriver::new(config, registry, shutdown_rx)
+    ModbusDriver::new(config, registry)
 }
 
 // ---------------------------------------------------------------------------
@@ -401,10 +400,9 @@ async fn driver_reconnects_after_server_restart() {
     );
     let registry = make_registry(&[("rtag", TagDataType::UInt16)]);
     // Use a short max_backoff so the endless retry loop doesn't hang the test.
-    let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
     let mut config = ModbusConfig::new("test-plc", addr, 1, 100, vec![mapping]);
     config.max_backoff_secs = 1;
-    let driver = ModbusDriver::new(config, registry.clone(), shutdown_rx);
+    let driver = ModbusDriver::new(config, registry.clone());
 
     // First read fails — nothing is listening. Bounded by timeout to avoid the
     // driver's infinite connect retry loop.
@@ -581,9 +579,8 @@ fn validate_rejects_overlapping_ranges() {
         ),
     ];
     let registry = make_registry(&[("x", TagDataType::UInt16), ("y", TagDataType::UInt16)]);
-    let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
     let config = ModbusConfig::new("test", "127.0.0.1:502".parse().unwrap(), 1, 100, mappings);
-    let driver = ModbusDriver::new(config, registry, shutdown_rx);
+    let driver = ModbusDriver::new(config, registry);
     let result = driver.validate();
     assert!(result.is_err(), "overlapping ranges must fail validation");
 }
@@ -602,8 +599,7 @@ fn validate_rejects_zero_quantity() {
         WordOrder::ABCD,
     )];
     let registry = make_registry(&[("z", TagDataType::UInt16)]);
-    let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
     let config = ModbusConfig::new("test", "127.0.0.1:502".parse().unwrap(), 1, 100, mappings);
-    let driver = ModbusDriver::new(config, registry, shutdown_rx);
+    let driver = ModbusDriver::new(config, registry);
     assert!(driver.validate().is_err());
 }

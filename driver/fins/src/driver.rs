@@ -14,7 +14,7 @@ use std::time::{Duration, SystemTime};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::error::TryRecvError;
-use tokio::sync::{mpsc, watch, Mutex};
+use tokio::sync::{mpsc, Mutex};
 use tokio::time;
 use tracing::{error, info, warn};
 
@@ -50,16 +50,11 @@ pub struct FinsDriver {
     conn: Mutex<Option<TcpStream>>,
     /// Precomputed read groups derived from `config.mappings`.
     read_groups: Vec<ReadGroup>,
-    pub shutdown_rx: watch::Receiver<bool>,
     health_tx: Arc<Mutex<Option<mpsc::Sender<Value>>>>,
 }
 
 impl FinsDriver {
-    pub fn new(
-        config: FinsConfig,
-        registry: Arc<TagRegistry>,
-        driver_shutdown_rx: watch::Receiver<bool>,
-    ) -> Self {
+    pub fn new(config: FinsConfig, registry: Arc<TagRegistry>) -> Self {
         let (tx, rx) = mpsc::channel(256);
 
         // Precompute read groups from mappings: group contiguous addresses within each area.
@@ -126,7 +121,6 @@ impl FinsDriver {
             sid_counter: Arc::new(AtomicU8::new(1)),
             conn: Mutex::new(None),
             read_groups,
-            shutdown_rx: driver_shutdown_rx,
             health_tx: Arc::new(Mutex::new(None)),
         }
     }
@@ -213,9 +207,7 @@ impl FinsDriver {
         bytes
     }
 
-    /// Read a fixed-size numeric value from `data_bytes`, check length, and publish.
-    #[allow(clippy::too_many_arguments)]
-    fn decode_fixed<T: Default>(
+    fn decode_fixed<T>(
         &self,
         mapping: &TagMapping,
         data_bytes: &[u8],
@@ -231,7 +223,8 @@ impl FinsDriver {
             )));
         }
         let mut rdr = Cursor::new(&data_bytes[..size]);
-        let v = read(&mut rdr).unwrap_or_default();
+        let v = read(&mut rdr)
+            .map_err(|e| DriverError::Protocol(format!("Failed to decode {type_name}: {e}")))?;
         let _ = self.registry.update_tag_value(
             mapping.tag_id.as_ref(),
             into_value(v),
@@ -928,7 +921,12 @@ impl driver_common::ProtocolDriver for FinsDriver {
                     m.tag_id
                 ))));
             }
-            // Basic data type vs word_count check
+            if m.bit_offset >= 16 {
+                return Err(Box::new(DriverError::mapping(format!(
+                    "Mapping '{}' has invalid bit_offset {} (must be 0..15)",
+                    m.tag_id, m.bit_offset
+                ))));
+            }
             match m.data_type {
                 TagDataType::Float | TagDataType::Int32 | TagDataType::UInt32
                     if m.word_count < 2 =>
@@ -945,6 +943,43 @@ impl driver_common::ProtocolDriver for FinsDriver {
                     ))));
                 }
                 _ => {}
+            }
+            if (m.byte_order == WordOrder::CDAB || m.byte_order == WordOrder::DCBA)
+                && m.word_count < 2
+            {
+                return Err(Box::new(DriverError::mapping(format!(
+                    "Mapping '{}' uses byte_order {:?} which requires word_count >= 2",
+                    m.tag_id, m.byte_order
+                ))));
+            }
+        }
+
+        let mut by_area: std::collections::HashMap<u8, Vec<&crate::mapping::TagMapping>> =
+            std::collections::HashMap::new();
+        for m in &self.config.mappings {
+            by_area.entry(m.area).or_default().push(m);
+        }
+        for (_area, mut vecm) in by_area.into_iter() {
+            vecm.sort_by_key(|m| m.address);
+            for w in 0..vecm.len().saturating_sub(1) {
+                let cur = vecm[w];
+                let next = vecm[w + 1];
+                let cur_end = cur
+                    .address
+                    .saturating_add(cur.word_count as u32)
+                    .saturating_sub(1);
+                if next.address <= cur_end {
+                    return Err(Box::new(DriverError::mapping(format!(
+                        "Overlapping FINS ranges for area 0x{:02X}: '{}'[{}..{}] overlaps '{}'[{}..{}]",
+                        _area,
+                        cur.tag_id,
+                        cur.address,
+                        cur_end,
+                        next.tag_id,
+                        next.address,
+                        next.address.saturating_add(next.word_count as u32).saturating_sub(1)
+                    ))));
+                }
             }
         }
         Ok(())
@@ -1028,13 +1063,11 @@ mod tests {
         let defs: Vec<core_model::TagDefinition> = Vec::new();
         let registry =
             Arc::new(core_model::TagRegistry::from_definitions(&defs).expect("build registry"));
-        let (driver_shutdown_tx, driver_shutdown_rx) = watch::channel(false);
-        let drv = FinsDriver::new(cfg, registry, driver_shutdown_rx);
+        let drv = FinsDriver::new(cfg, registry);
         let tx = drv.write_sender();
         // Use an explicit `String` here to avoid inference issues with `Into<String>` in tests.
         let req = WriteRequest::new(String::from("a"), TagValue::UInt16(1));
         let _ = tx.try_send(req);
-        let _ = driver_shutdown_tx;
     }
 
     /// #feature DRV-FINS
@@ -1062,9 +1095,7 @@ mod tests {
         let defs: Vec<core_model::TagDefinition> = vec![];
         let registry =
             Arc::new(core_model::TagRegistry::from_definitions(&defs).expect("build registry"));
-        let (driver_shutdown_tx, driver_shutdown_rx) = watch::channel(false);
-        let drv = FinsDriver::new(cfg, registry, driver_shutdown_rx);
+        let drv = FinsDriver::new(cfg, registry);
         let _ = drv;
-        let _ = driver_shutdown_tx;
     }
 }

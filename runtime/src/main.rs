@@ -22,7 +22,7 @@ use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use tokio::net::lookup_host;
 use tokio::signal;
-use tokio::sync::{mpsc, watch};
+use tokio::sync::mpsc;
 use tracing::{info, warn};
 use tracing_subscriber::{fmt, EnvFilter};
 
@@ -92,7 +92,6 @@ async fn main() -> Result<()> {
 
     let health_dash: Arc<DashMap<String, JsonValue>> = Arc::new(DashMap::new());
     let (health_tx, mut health_rx) = mpsc::channel::<JsonValue>(health_capacity);
-    write_handler = write_handler.with_health_map(health_dash.clone());
 
     let known_plcs: Arc<HashSet<String>> =
         Arc::new(cfg.plcs.iter().map(|p| p.name.clone()).collect());
@@ -150,12 +149,7 @@ async fn main() -> Result<()> {
                     mappings,
                     max_words_per_request: plc.max_words_per_request.unwrap_or(960),
                 };
-                let (drv_shutdown_tx, drv_shutdown_rx) = watch::channel(false);
-                let fins_drv = Arc::new(FinsDriver::new(
-                    fins_cfg,
-                    registry.clone(),
-                    drv_shutdown_rx.clone(),
-                ));
+                let fins_drv = Arc::new(FinsDriver::new(fins_cfg, registry.clone()));
 
                 // Perform pre-flight validation
                 driver_common::ProtocolDriver::validate(fins_drv.as_ref()).map_err(|e| {
@@ -173,7 +167,6 @@ async fn main() -> Result<()> {
                     proto,
                     plc.name.clone(),
                     Duration::from_millis(plc.cycle_ms),
-                    drv_shutdown_tx.clone(),
                     registry.clone(),
                 );
                 runtime_drv.set_health_sender(health_tx.clone());
@@ -212,12 +205,7 @@ async fn main() -> Result<()> {
                     max_backoff_secs: 30,
                     io_timeout_ms: 2000,
                 };
-                let (drv_shutdown_tx, drv_shutdown_rx) = watch::channel(false);
-                let modbus_drv = Arc::new(ModbusDriver::new(
-                    modbus_cfg,
-                    registry.clone(),
-                    drv_shutdown_rx.clone(),
-                ));
+                let modbus_drv = Arc::new(ModbusDriver::new(modbus_cfg, registry.clone()));
 
                 // Perform pre-flight validation
                 driver_common::ProtocolDriver::validate(modbus_drv.as_ref()).map_err(|e| {
@@ -235,7 +223,6 @@ async fn main() -> Result<()> {
                     proto,
                     plc.name.clone(),
                     Duration::from_millis(plc.cycle_ms),
-                    drv_shutdown_tx.clone(),
                     registry.clone(),
                 );
                 runtime_drv.set_health_sender(health_tx.clone());
@@ -252,9 +239,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    let opcua_cfg = cfg
-        .opcua
-        .ok_or_else(|| anyhow!("Missing opcua configuration"))?;
+    let opcua_cfg = cfg.opcua;
 
     // Parse with strict validation — unknown values fail startup instead of
     // silently falling back to potentially insecure defaults.

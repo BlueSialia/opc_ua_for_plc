@@ -27,14 +27,8 @@ pub struct RuntimeDriver {
     /// Poll interval for scheduling `read_cycle`.
     poll_interval: Duration,
 
-    /// Optional health event sender. When set the runtime will forward driver
-    /// health snapshots to this channel after each successful or failing cycle.
+    /// Optional health event sender.
     health_tx: Option<mpsc::Sender<JsonValue>>,
-
-    /// Optional sender used to signal the underlying protocol driver to shutdown.
-    /// The runtime will send `true` on this channel when `stop()` is called so the
-    /// protocol driver can perform its own cleanup (e.g. close sockets).
-    proto_shutdown_tx: Option<watch::Sender<bool>>,
 
     /// Internal shutdown channel used to notify the background poller.
     shutdown_tx: watch::Sender<bool>,
@@ -56,7 +50,6 @@ impl RuntimeDriver {
         driver: Arc<dyn ProtocolDriver>,
         name: impl Into<String>,
         poll_interval: Duration,
-        proto_shutdown_tx: watch::Sender<bool>,
         registry: Arc<TagRegistry>,
     ) -> Self {
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
@@ -65,7 +58,6 @@ impl RuntimeDriver {
             driver,
             poll_interval,
             health_tx: None,
-            proto_shutdown_tx: Some(proto_shutdown_tx),
             shutdown_tx,
             shutdown_rx,
             poll_handle: Mutex::new(None),
@@ -209,13 +201,6 @@ impl RuntimeDriver {
 
     /// Stop background poller and wait for it to finish.
     pub async fn stop(&self) {
-        // First, signal the underlying protocol driver (if provided) so it can
-        // perform its own shutdown (closing sockets, flushing queues, ...).
-        if let Some(tx) = &self.proto_shutdown_tx {
-            let _ = tx.send(true);
-        }
-
-        // Signal the runtime poller to stop.
         let _ = self.shutdown_tx.send(true);
 
         // Take the handle and await it
@@ -296,7 +281,6 @@ mod tests {
     #[tokio::test]
     async fn runtime_driver_start_stop() {
         let proto = Arc::new(DummyProtoDriver) as Arc<dyn ProtocolDriver>;
-        let (drv_shutdown_tx, _drv_shutdown_rx) = tokio::sync::watch::channel(false);
         let defs = vec![core_model::TagDefinition::new(
             "t1",
             "t1",
@@ -306,13 +290,7 @@ mod tests {
         )];
         let registry =
             Arc::new(core_model::TagRegistry::from_definitions(&defs).expect("build registry"));
-        let mut rd = RuntimeDriver::new(
-            proto,
-            "test-plc",
-            Duration::from_millis(10),
-            drv_shutdown_tx.clone(),
-            registry,
-        );
+        let mut rd = RuntimeDriver::new(proto, "test-plc", Duration::from_millis(10), registry);
         let (tx, mut rx) = mpsc::channel::<JsonValue>(8);
         rd.set_health_sender(tx);
         rd.start().await;

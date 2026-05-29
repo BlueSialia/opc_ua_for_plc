@@ -59,12 +59,16 @@ pub fn tagconfig_to_definition(t: &TagConfig, plc_name: &str) -> Result<TagDefin
         },
     };
 
-    let mut def = TagDefinition::new(t.id.clone(), t.name.clone(), t.address.clone(), dt);
+    let mut def = TagDefinition::new(
+        t.id.clone(),
+        t.name.clone(),
+        t.address.clone(),
+        dt,
+        Arc::from(plc_name),
+    );
     def.writable = t.writable;
     def.byte_order = byte_order;
     def.metadata = None;
-    // Explicitly set the PLC name so the OPC UA server does not need to parse the id.
-    def.plc_name = Some(Arc::from(plc_name));
     Ok(def)
 }
 

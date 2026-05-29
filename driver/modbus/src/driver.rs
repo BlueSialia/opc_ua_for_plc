@@ -35,19 +35,13 @@ pub struct ModbusDriver {
     write_rx: Arc<Mutex<mpsc::Receiver<WriteRequest>>>,
     /// Persistent Modbus client context.
     client: Arc<Mutex<Option<ClientContext>>>,
-    /// Shutdown signal receiver.
-    pub shutdown_rx: tokio::sync::watch::Receiver<bool>,
     /// Optional health sender (JSON).
     health_tx: Arc<Mutex<Option<mpsc::Sender<serde_json::Value>>>>,
 }
 
 impl ModbusDriver {
     /// Create a new driver instance.
-    pub fn new(
-        config: ModbusConfig,
-        registry: Arc<TagRegistry>,
-        driver_shutdown_rx: tokio::sync::watch::Receiver<bool>,
-    ) -> Self {
+    pub fn new(config: ModbusConfig, registry: Arc<TagRegistry>) -> Self {
         let (tx, rx) = mpsc::channel(256);
         Self {
             config,
@@ -55,7 +49,6 @@ impl ModbusDriver {
             write_tx: tx,
             write_rx: Arc::new(Mutex::new(rx)),
             client: Arc::new(Mutex::new(None)),
-            shutdown_rx: driver_shutdown_rx,
             health_tx: Arc::new(Mutex::new(None)),
         }
     }
@@ -125,39 +118,6 @@ impl ModbusDriver {
     /// Obtain a sender to queue write requests.
     pub fn write_sender(&self) -> mpsc::Sender<WriteRequest> {
         self.write_tx.clone()
-    }
-
-    /// Spawn a background polling task using the configured cycle interval.
-    /// The task runs until shutdown is signalled via the `shutdown_rx` watch channel.
-    pub fn spawn_polling(self: Arc<Self>) -> tokio::task::JoinHandle<()> {
-        let interval = Duration::from_millis(self.config.cycle_ms);
-        tokio::spawn(async move {
-            // Validate configuration before starting the poll loop
-            if let Err(e) = self.validate() {
-                error!(driver = %self.config.name, error = %e, "Configuration validation failed; aborting poller");
-                return;
-            }
-
-            let mut ticker = time::interval(interval);
-            // clone a local receiver so we can await changes reactively
-            let mut shutdown_rx = self.shutdown_rx.clone();
-
-            loop {
-                tokio::select! {
-                    _ = ticker.tick() => {
-                        if let Err(e) = self.read_cycle().await {
-                            warn!(driver = %self.config.name, error = %e, "read_cycle failed");
-                            // small sleep to avoid tight-loop on persistent failure
-                            time::sleep(Duration::from_millis(100)).await;
-                        }
-                    }
-                    _ = shutdown_rx.changed() => {
-                        debug!(driver = %self.config.name, "shutdown requested, exiting polling loop");
-                        break;
-                    }
-                }
-            }
-        })
     }
 
     /// Internal helper to perform a reconnect with backoff and return a connected client.
@@ -269,16 +229,14 @@ impl ModbusDriver {
                 Ok(TagValue::UInt64(bits))
             }
             TagDataType::DateTime => {
-                // Prefer 8-byte epoch seconds/milliseconds when available; otherwise parse as RFC3339 UTF-8.
+                // 8-byte milliseconds since UNIX epoch; otherwise fallback to RFC3339 UTF-8.
                 if bytes.len() >= 8 {
-                    // treat as 64-bit signed seconds since epoch
                     let mut rdr = Cursor::new(&bytes[0..8]);
-                    let secs = ReadBytesExt::read_i64::<BigEndian>(&mut rdr).unwrap_or(0);
-                    let dt: chrono::DateTime<Utc> = chrono::DateTime::from_timestamp(secs, 0)
+                    let ms = ReadBytesExt::read_i64::<BigEndian>(&mut rdr).unwrap_or(0);
+                    let dt: chrono::DateTime<Utc> = chrono::DateTime::from_timestamp_millis(ms)
                         .unwrap_or(chrono::DateTime::UNIX_EPOCH);
                     Ok(TagValue::DateTime(dt))
                 } else {
-                    // fallback: expect an RFC3339 string
                     let s = std::str::from_utf8(bytes).map_err(|_| {
                         DriverError::other("Not enough data for DateTime and not valid UTF-8")
                     })?;
@@ -1077,9 +1035,7 @@ mod tests {
             max_backoff_secs: 1,
             io_timeout_ms: 2000,
         };
-        let (_driver_shutdown_tx, driver_shutdown_rx) = tokio::sync::watch::channel(false);
-        // Pass the TagRegistry (drivers now expect the registry, not the raw TagStore)
-        let drv = ModbusDriver::new(cfg, registry.clone(), driver_shutdown_rx);
+        let drv = ModbusDriver::new(cfg, registry.clone());
         let sender = drv.write_sender();
         sender
             .try_send(WriteRequest::new("tag1", CMTagValue::UInt16(1234)))

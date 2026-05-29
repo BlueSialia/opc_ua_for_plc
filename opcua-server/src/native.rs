@@ -446,19 +446,8 @@ pub fn start_native_server(
 
     for def in registry.all_definitions_sorted() {
         let id_str = def.id_str().to_string();
-        // Use the explicit plc_name from TagDefinition if set; otherwise fall back
-        // to deriving the PLC group from the tag id (legacy behavior).
-        let plc_name: String = def
-            .plc_name
-            .as_ref()
-            .map(|a| a.as_ref().to_string())
-            .unwrap_or_else(|| {
-                id_str
-                    .split(&['.', ':'][..])
-                    .next()
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| "PLC".to_string())
-            });
+        // Use the explicit plc_name from TagDefinition.
+        let plc_name: String = def.plc_name.as_ref().to_string();
 
         let plc_node_id = if let Some(n) = plc_nodes.get(&plc_name) {
             n.clone()
@@ -551,16 +540,6 @@ pub fn start_native_server(
     let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel::<bool>(false);
     let cfg_clone = cfg.clone();
 
-    // Event bridge is disabled: data source nodes serve values through
-    // their read callback. Calling write_data_value on a data source node
-    // triggers the DataSource::write callback, which would write every
-    // registry update back to the PLC — a destructive feedback loop.
-    //
-    // Subscriptions still work: open62541's cyclic monitored-item sampling
-    // calls DataSource::read() on each interval and compares against the
-    // previously stored value. No external push mechanism is needed.
-    let event_bridge_thread: Option<std::thread::JoinHandle<()>> = None;
-
     // Use AtomicBool for cross-thread shutdown signalling with ServerRunner.
     let shutdown_flag = Arc::new(AtomicBool::new(false));
     let shutdown_flag_for_runner = shutdown_flag.clone();
@@ -601,6 +580,5 @@ pub fn start_native_server(
         shutdown_tx,
         join_handle,
         processing_thread,
-        event_bridge_thread,
     ))
 }

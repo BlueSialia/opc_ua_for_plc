@@ -16,7 +16,6 @@ pub struct ServerHandle {
     pub(crate) shutdown_tx: watch::Sender<bool>,
     pub(crate) join_handle: JoinHandle<Result<(), ServerError>>,
     pub(crate) write_bridge_thread: Option<std::thread::JoinHandle<()>>,
-    pub(crate) event_bridge_thread: Option<std::thread::JoinHandle<()>>,
 }
 
 impl ServerHandle {
@@ -25,13 +24,11 @@ impl ServerHandle {
         shutdown_tx: watch::Sender<bool>,
         join_handle: JoinHandle<Result<(), ServerError>>,
         write_bridge_thread: std::thread::JoinHandle<()>,
-        event_bridge_thread: Option<std::thread::JoinHandle<()>>,
     ) -> Self {
         Self {
             shutdown_tx,
             join_handle,
             write_bridge_thread: Some(write_bridge_thread),
-            event_bridge_thread,
         }
     }
 
@@ -47,9 +44,6 @@ impl ServerHandle {
     /// and tag event bridge) to detect any panics and ensure clean shutdown.
     pub async fn wait(self) -> Result<(), ServerError> {
         if let Some(h) = self.write_bridge_thread {
-            let _ = h.join();
-        }
-        if let Some(h) = self.event_bridge_thread {
             let _ = h.join();
         }
         match self.join_handle.await {

@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use dashmap::DashMap;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use tokio::sync::{mpsc, oneshot};
@@ -23,9 +22,6 @@ enum DriverSender {
 /// Runtime write handler: validate, route, and confirm writes.
 pub struct RuntimeWriteHandler {
     /// Map of tag_id -> driver sender.
-    ///
-    /// Wrapped in `Arc` so the `handle_write` future captures a cheap clone
-    /// instead of cloning the entire routing table on every OPC UA write.
     routing: Arc<HashMap<Arc<str>, DriverSender>>,
 
     /// TagRegistry gives access to definitions and runtime tags for validation and lookups.
@@ -34,12 +30,7 @@ pub struct RuntimeWriteHandler {
     /// Runtime timeout to wait for driver confirmation.
     confirm_timeout: Duration,
 
-    /// Optional health map used to record PLC status and errors (namespaced by PLC name).
-    /// The runtime provides a shared `DashMap` instance which the handler may update.
-    health_map: Option<Arc<DashMap<String, serde_json::Value>>>,
-
     /// Timeout to use when sending into a driver's mpsc write queue.
-    /// Prevents the OPC UA handling task from awaiting indefinitely on a full queue.
     driver_send_timeout: Duration,
 }
 
@@ -50,15 +41,8 @@ impl RuntimeWriteHandler {
             routing: Arc::new(HashMap::new()),
             registry,
             confirm_timeout,
-            health_map: None,
             driver_send_timeout: Duration::from_secs(2),
         }
-    }
-
-    /// Set shared DashMap health map.
-    pub fn with_health_map(mut self, hm: Arc<DashMap<String, serde_json::Value>>) -> Self {
-        self.health_map = Some(hm);
-        self
     }
 
     /// Set driver send timeout.
