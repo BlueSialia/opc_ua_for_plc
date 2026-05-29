@@ -267,42 +267,8 @@ impl ModbusDriver {
     /// calls this and converts errors into the boxed `DynDriverError`.
     #[instrument(skip(self), fields(driver = %self.config.name))]
     pub async fn run_read_cycle_impl(&self) -> Result<(), DriverError> {
-        // Reuse or establish persistent client context.
-        let io_timeout = Duration::from_millis(self.config.io_timeout_ms);
-        {
-            let mut guard = self.client.lock().await;
-            if guard.is_none() {
-                match self.connect_with_backoff().await {
-                    Ok(ctx_new) => {
-                        *guard = Some(ctx_new);
-                    }
-                    Err(e) => {
-                        error!(error = ?e, "Failed to establish persistent Modbus context");
-                        return Err(e);
-                    }
-                }
-            }
-        }
-
-        // Take the persistent context out of the mutex so we do not hold the mutex across awaits.
-        let mut maybe_ctx = {
-            let mut guard = self.client.lock().await;
-            guard.take()
-        };
-        if maybe_ctx.is_none() {
-            match self.connect_with_backoff().await {
-                Ok(ctx_new) => maybe_ctx = Some(ctx_new),
-                Err(e) => {
-                    error!(error = ?e, "Failed to obtain Modbus context");
-                    return Err(e);
-                }
-            }
-        }
-        let ctx_ref = maybe_ctx
-            .as_mut()
-            .ok_or_else(|| DriverError::Other("No Modbus context available".into()))?;
-
-        // First: handle writes queued by OPC UA. Drain a limited amount to avoid starvation.
+        // Handle writes first, using the persistent client context directly.
+        // This avoids creating a second connection when reads also need the context.
         {
             let mut rx = self.write_rx.lock().await;
             for _ in 0..64 {
@@ -522,6 +488,41 @@ impl ModbusDriver {
                 }
             }
         }
+
+        // Reuse or establish persistent client context for reads.
+        let io_timeout = Duration::from_millis(self.config.io_timeout_ms);
+        {
+            let mut guard = self.client.lock().await;
+            if guard.is_none() {
+                match self.connect_with_backoff().await {
+                    Ok(ctx_new) => {
+                        *guard = Some(ctx_new);
+                    }
+                    Err(e) => {
+                        error!(error = ?e, "Failed to establish persistent Modbus context");
+                        return Err(e);
+                    }
+                }
+            }
+        }
+
+        // Take the persistent context out of the mutex so we do not hold the mutex across awaits.
+        let mut maybe_ctx = {
+            let mut guard = self.client.lock().await;
+            guard.take()
+        };
+        if maybe_ctx.is_none() {
+            match self.connect_with_backoff().await {
+                Ok(ctx_new) => maybe_ctx = Some(ctx_new),
+                Err(e) => {
+                    error!(error = ?e, "Failed to obtain Modbus context");
+                    return Err(e);
+                }
+            }
+        }
+        let ctx_ref = maybe_ctx
+            .as_mut()
+            .ok_or_else(|| DriverError::Other("No Modbus context available".into()))?;
 
         // Group mappings by function and address to minimize round-trips.
         let mut by_func: HashMap<ModbusFunction, Vec<ModbusMapping>> = HashMap::new();
