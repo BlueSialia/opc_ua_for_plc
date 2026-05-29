@@ -11,7 +11,7 @@ readme = "../README.md"
 
 # This crate is the application entrypoint (binary)
 [[bin]]
-name = "runtime"
+name = "opc_ua_for_plc"
 path = "src/main.rs"
 
 [dependencies]

@@ -131,15 +131,35 @@ cd opc_ua_for_plc
 cargo build
 ```
 
-TODO: End with an example of getting some data out of the system or using it for a little demo
-
 ## Running the tests
 
-You can run the test suite with:
+### Unit Tests
+
+You can run the unit tests with:
 
 ```
-cargo test --all
+cargo test --all --lib
 ```
+
+### Integration Tests
+
+You can run the integration tests with:
+
+```
+cargo test --all --test
+```
+
+### E2E Tests
+
+You can run the E2E tests with:
+
+```
+docker compose -f e2e-tests/docker-compose.yml --profile [node/python] up --abort-on-container-exit
+```
+
+You can only run the E2E tests for the node or python profile, not both because each starts a different OPC UA client that runs tests and they will interfere with each other.
+
+### Linting
 
 On top of it you should also periodically run the linter with:
 
@@ -153,15 +173,7 @@ And verify that the documentation builds without warnings:
 RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps
 ```
 
-### Break down into end to end tests
-
-TODO: Explain what these tests test and why
-
-```
-Give an example
-```
-
-### And coding style tests
+### Coding Style
 
 In order to maintain a similar style over the codebase we use:
 
@@ -171,7 +183,13 @@ cargo fmt
 
 ## Deployment
 
-Add additional notes about how to deploy this on a live system
+Download the latest binary from the [GitHub releases page](https://github.com/BlueSialia/opc_ua_for_plc/releases). Place it on the target machine alongside a TOML or YAML configuration file (see `examples/config.toml` for an annotated template), then run:
+
+```sh
+./opc_ua_for_plc path/to/config.toml
+```
+
+The binary is statically linked — no Rust toolchain or system libraries are required on the target. For production deployments behind a reverse proxy or load balancer, ensure the OPC UA TCP port (default 4840) is exposed.
 
 ## Built With
 
