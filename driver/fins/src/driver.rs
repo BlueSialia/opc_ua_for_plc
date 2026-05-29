@@ -193,13 +193,17 @@ impl FinsDriver {
         p
     }
 
-    fn parse_fins_response(frame: &[u8]) -> Result<(u8, Vec<u8>), DriverError> {
-        if frame.len() < 11 {
+    fn parse_fins_response(frame: &[u8]) -> Result<(u8, u16, Vec<u8>), DriverError> {
+        if frame.len() < 14 {
             return Err(DriverError::Protocol("Frame too short".into()));
         }
-        let sid = frame[10];
-        let data = frame[13..].to_vec();
-        Ok((sid, data))
+        // FINS response frame layout:
+        // [0] ICF, [1] RSV, [2] GCT, [3-5] DNA, [6-8] SNA, [9] SID,
+        // [10-11] Command, [12-13] EndCode, [14+] Data
+        let sid = frame[9];
+        let end_code = u16::from_be_bytes([frame[12], frame[13]]);
+        let data = frame[14..].to_vec();
+        Ok((sid, end_code, data))
     }
 
     fn apply_byte_order(mut bytes: Vec<u8>, order: &WordOrder) -> Vec<u8> {
@@ -662,14 +666,13 @@ impl FinsDriver {
                             *guard = Some(stream);
                         }
                         match Self::parse_fins_response(&payload) {
-                            Ok((resp_sid, data)) => {
+                            Ok((resp_sid, end_code, _data)) => {
                                 if resp_sid != sid {
                                     warn!(
                                         expected = sid,
                                         got = resp_sid,
                                         "SID mismatch on write response; dropping"
                                     );
-                                    // SID mismatch likely indicates protocol/comms issue -> comm lost.
                                     let _ = self.registry.set_tag_quality(
                                         mapping.tag_id.as_ref(),
                                         TagQuality::CommLost,
@@ -679,29 +682,22 @@ impl FinsDriver {
                                     }
                                     continue;
                                 }
-                                if data.len() >= 2 {
-                                    let end_code = u16::from_be_bytes([data[0], data[1]]);
-                                    if end_code != 0 {
-                                        warn!(
-                                            end_code = end_code,
-                                            "FINS write returned error code"
-                                        );
-                                        // Driver/PLC reported an error; mark as backend error.
-                                        let _ = self.registry.set_tag_quality(
-                                            mapping.tag_id.as_ref(),
-                                            TagQuality::Error(format!(
-                                                "FINS end code: 0x{:04X}",
-                                                end_code
-                                            )),
-                                        );
-                                        if let Some(reply) = req.reply {
-                                            let _ = reply.send(Err(format!(
-                                                "FINS end code: 0x{:04X}",
-                                                end_code
-                                            )));
-                                        }
-                                        continue;
+                                if end_code != 0 {
+                                    warn!(end_code = end_code, "FINS write returned error code");
+                                    let _ = self.registry.set_tag_quality(
+                                        mapping.tag_id.as_ref(),
+                                        TagQuality::Error(format!(
+                                            "FINS end code: 0x{:04X}",
+                                            end_code
+                                        )),
+                                    );
+                                    if let Some(reply) = req.reply {
+                                        let _ = reply.send(Err(format!(
+                                            "FINS end code: 0x{:04X}",
+                                            end_code
+                                        )));
                                     }
+                                    continue;
                                 }
                                 let source_ts = chrono::Utc::now();
                                 let _ = self.registry.update_tag_value(
@@ -811,7 +807,7 @@ impl FinsDriver {
             }
 
             match Self::parse_fins_response(&payload) {
-                Ok((resp_sid, data)) => {
+                Ok((resp_sid, end_code, payload_bytes)) => {
                     if resp_sid != sid {
                         warn!(
                             expected = sid,
@@ -824,27 +820,18 @@ impl FinsDriver {
                                 .set_tag_quality(mapping.tag_id.as_ref(), TagQuality::CommLost);
                         }
                     } else {
-                        let (end_code_opt, payload_bytes) = if data.len() >= 2 {
-                            let ec = u16::from_be_bytes([data[0], data[1]]);
-                            (Some(ec), data[2..].to_vec())
-                        } else {
-                            (None, data)
-                        };
-
-                        if let Some(ec) = end_code_opt {
-                            if ec != 0 {
-                                warn!(
-                                    end_code = ec,
-                                    "FINS read returned non-zero end code; marking tags Error"
+                        if end_code != 0 {
+                            warn!(
+                                end_code = end_code,
+                                "FINS read returned non-zero end code; marking tags Error"
+                            );
+                            for mapping in &group.mappings {
+                                let _ = self.registry.set_tag_quality(
+                                    mapping.tag_id.as_ref(),
+                                    TagQuality::Error(format!("FINS end code: 0x{:04X}", end_code)),
                                 );
-                                for mapping in &group.mappings {
-                                    let _ = self.registry.set_tag_quality(
-                                        mapping.tag_id.as_ref(),
-                                        TagQuality::Error(format!("FINS end code: 0x{:04X}", ec)),
-                                    );
-                                }
-                                break;
                             }
+                            break;
                         }
 
                         let expected_len = (group.word_count as usize) * 2;
