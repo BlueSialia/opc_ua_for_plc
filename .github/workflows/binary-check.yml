@@ -25,7 +25,7 @@ jobs:
 
       - name: Measure compilation time
         run: |
-          /usr/bin/time -o compile-time.txt cargo build --release
+          /usr/bin/time -f '%e' -o compile-time.txt cargo build --release
           echo "Compilation time (real seconds): $(cat compile-time.txt)"
 
       - name: Measure binary sizes
