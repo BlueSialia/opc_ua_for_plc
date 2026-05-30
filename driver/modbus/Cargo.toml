@@ -1,6 +1,6 @@
 [package]
 name = "driver-modbus"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 publish = false
 description = "Modbus/TCP driver for the opc_ua_for_plc gateway (async, tokio-based)"
