@@ -2,20 +2,14 @@
 # See: https://git-cliff.org/docs/configuration
 
 [changelog]
-header = """# Changelog
-
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-"""
+header = "# Changelog\n\nAll notable changes to this project will be documented in this file.\n\nThe format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),\nand this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).\n"
 body = """
-## [{{ version }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+## [{{ version }}]{% if timestamp %} - {{ timestamp | date(format="%Y-%m-%d") }}{% endif %}
 
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | upper_first }}
 {% for commit in commits %}
-- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }}{% if commit.breaking %} [**BREAKING**]{% endif %}\
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }}{% if commit.breaking %} [**BREAKING**]{% endif %}
 {% endfor %}
 {% endfor %}
 """
