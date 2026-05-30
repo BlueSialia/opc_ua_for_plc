@@ -16,8 +16,8 @@ path = "src/lib.rs"
 
 [dependencies]
 # Core internal model (workspace member)
-core-model = { path = "../../core-model" }
-driver_common = { package = "driver-common", path = "../common" }
+core-model = { version = "0.1.0", path = "../../core-model" }
+driver_common = { package = "driver-common", version = "0.1.0", path = "../common" }
 
 # Async runtime
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }

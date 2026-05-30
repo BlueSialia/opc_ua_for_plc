@@ -16,7 +16,7 @@ path = "src/lib.rs"
 
 [dependencies]
 # Internal workspace crate providing TagRegistry, TagStore, TagValue, etc.
-core-model = { path = "../core-model" }
+core-model = { version = "0.1.0", path = "../core-model" }
 
 # Async runtime and utilities
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync"] }

@@ -19,7 +19,7 @@ path = "src/lib.rs"
 async-trait = "0.1"
 
 # Core internal model (workspace member) — required by the common trait for types such as TagValue
-core-model = { path = "../../core-model" }
+core-model = { version = "0.1.0", path = "../../core-model" }
 
 # JSON helper used by the runtime/drivers for health payloads
 serde_json = "1.0"

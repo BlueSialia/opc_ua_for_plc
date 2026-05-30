@@ -17,12 +17,12 @@ path = "src/main.rs"
 
 [dependencies]
 # Internal workspace crates
-core-model = { path = "../core-model" }
-driver-fins = { path = "../driver/fins" }
-driver-modbus = { path = "../driver/modbus" }
+core-model = { version = "0.1.0", path = "../core-model" }
+driver-fins = { version = "0.1.0", path = "../driver/fins" }
+driver-modbus = { version = "0.1.0", path = "../driver/modbus" }
 # Shared runtime-facing driver trait crate (workspace member)
-driver_common = { package = "driver-common", path = "../driver/common" }
-opcua-server = { path = "../opcua-server" }
+driver_common = { package = "driver-common", version = "0.1.0", path = "../driver/common" }
+opcua-server = { version = "0.1.0", path = "../opcua-server" }
 
 # Async runtime and utilities
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal"] }
