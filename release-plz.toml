@@ -4,7 +4,6 @@
 [workspace]
 git_release_type = "auto"
 git_only = true
-release_always = false
 
 # All packages write to a single root CHANGELOG.md.
 # Crates are workspace-internal and not published to crates.io.
