@@ -54,10 +54,11 @@ jobs:
 
       - name: Update changelog
         run: |
-          git cliff --unreleased --tag-pattern "v*" --prepend CHANGELOG.md
+          VERSION=$(grep '^version' runtime/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          git cliff --tag "v$VERSION" -o CHANGELOG.md
 
       - name: Commit and create PR
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "chore: release"
           branch: release/auto
