@@ -2,6 +2,7 @@
 # See: https://release-plz.ieni.dev/
 
 [workspace]
+git_release = true
 git_release_type = "auto"
 git_only = true
 
