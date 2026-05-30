@@ -2,6 +2,7 @@
 name = "driver-fins"
 version = "0.1.0"
 edition = "2021"
+publish = false
 description = "Omron FINS over TCP driver for the opc_ua_for_plc gateway"
 license = "Hippocratic License 3.0"
 repository = "https://github.com/BlueSialia/opc_ua_for_plc"

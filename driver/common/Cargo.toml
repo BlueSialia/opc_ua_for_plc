@@ -2,6 +2,7 @@
 name = "driver-common"
 version = "0.1.0"
 edition = "2021"
+publish = false
 description = "Shared driver traits and utilities for protocol drivers (FINS, Modbus, ...)"
 license = "Hippocratic License 3.0"
 repository = "https://github.com/BlueSialia/opc_ua_for_plc"
