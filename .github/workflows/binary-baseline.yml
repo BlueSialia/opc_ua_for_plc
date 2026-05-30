@@ -9,27 +9,37 @@ jobs:
     name: Update baseline
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build release
-        run: cargo build --release
+      - name: Measure compilation time
+        run: |
+          /usr/bin/time -o compile-time.txt cargo build --release
+          echo "Compilation time (real seconds): $(cat compile-time.txt)"
 
-      - name: Record baseline
+      - name: Record binary sizes
         run: |
           find target/release -maxdepth 1 -type f -executable \
             -exec stat --format='%n %s' {} \; \
             | sort \
             | jq -R 'split(" ") | {(.[0] | split("/")[-1]): (.[1] | tonumber)}' \
-            | jq -s add > baseline.json
-          echo "Baseline updated:"
+            | jq -s add > sizes.json
+
+      - name: Save baseline
+        run: |
+          jq -n \
+            --argjson binaries "$(cat sizes.json)" \
+            --arg time "$(cat compile-time.txt)" \
+            '{ binaries: $binaries, compile_time_real: $time | tonumber }' \
+            > baseline.json
+          echo "Baseline:"
           cat baseline.json
 
       - name: Save baseline to cache
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: baseline.json
           key: binary-baseline-${{ github.run_id }}

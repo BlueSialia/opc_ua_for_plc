@@ -11,7 +11,7 @@ env:
 
 jobs:
   pr-title:
-    name: PR title check
+    name: PR title
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -20,9 +20,32 @@ jobs:
           TITLE: ${{ github.event.pull_request.title }}
         run: |
           echo "Checking PR title: '$TITLE'"
-          if ! echo "$TITLE" | grep -qP '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: .+'; then
+          PATTERN='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: .+'
+          if ! echo "$TITLE" | grep -qE "$PATTERN"; then
             echo "::error::PR title does not follow Conventional Commits format."
-            echo "Expected: type(scope): description  or  type: description"
+            echo "Expected: type[(scope)][!]: description"
+            echo "Valid types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+            exit 1
+          fi
+
+  commit-msg:
+    name: Commit message
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Validate last commit message
+        run: |
+          MSG=$(git log -1 --pretty=%B)
+          FIRST_LINE=$(echo "$MSG" | head -n1)
+          echo "Checking commit: '$FIRST_LINE'"
+          PATTERN='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: .+'
+          if ! echo "$FIRST_LINE" | grep -qE "$PATTERN"; then
+            echo "::error::Commit message does not follow Conventional Commits format."
+            echo "Message: $FIRST_LINE"
+            echo "Expected: type[(scope)][!]: description"
             echo "Valid types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
             exit 1
           fi
@@ -31,7 +54,7 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -41,7 +64,7 @@ jobs:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -52,7 +75,7 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all
@@ -61,28 +84,19 @@ jobs:
     name: Docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps
 
-  commit-msg:
-    name: Commit message check
-    if: github.event_name == 'push'
+  machete:
+    name: Unused deps
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
         with:
-          fetch-depth: 0
-      - name: Validate last commit message
-        run: |
-          MSG=$(git log -1 --pretty=%B)
-          FIRST_LINE=$(echo "$MSG" | head -n1)
-          echo "Checking commit: '$FIRST_LINE'"
-          if ! echo "$FIRST_LINE" | grep -qP '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: .+'; then
-            echo "::error::Commit message does not follow Conventional Commits format."
-            echo "Message: $FIRST_LINE"
-            echo "Expected: type(scope): description  or  type: description"
-            echo "Valid types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
-            exit 1
-          fi
+          tool: cargo-machete
+      - run: cargo machete
