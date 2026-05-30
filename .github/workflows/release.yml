@@ -28,7 +28,23 @@ jobs:
       - name: Determine version bump
         id: bump
         run: |
-          BUMP=$(git cliff --bump 2>/dev/null || echo "patch")
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            RANGE="${LAST_TAG}..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+
+          if git log $RANGE --oneline | grep -qP '^[a-f0-9]+ .+?!:'; then
+            BUMP="major"
+          elif git log $RANGE --oneline | grep -qP '^[a-f0-9]+ feat'; then
+            BUMP="minor"
+          elif git log $RANGE --oneline | grep -qP '^[a-f0-9]+ fix'; then
+            BUMP="patch"
+          else
+            BUMP="patch"
+          fi
+
           echo "level=$BUMP" >> $GITHUB_OUTPUT
           echo "Bump level: $BUMP"
 
