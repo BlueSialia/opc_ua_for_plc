@@ -1,26 +1,55 @@
-name: Release management
+name: Release PR
 
 on:
   push:
     branches: ["main"]
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
-  release-plz:
-    name: release-plz
+  release-pr:
+    name: Create release PR
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore: release') }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
 
-      - name: Run release-plz
-        uses: MarcoIeni/release-plz-action@v0.5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-edit,git-cliff
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          BUMP=$(git cliff --bump 2>/dev/null || echo "patch")
+          echo "level=$BUMP" >> $GITHUB_OUTPUT
+          echo "Bump level: $BUMP"
+
+      - name: Bump crate versions
+        run: |
+          cargo set-version --bump ${{ steps.bump.outputs.level }} --workspace
+
+      - name: Update changelog
+        run: |
+          git cliff --unreleased --tag-pattern "v*" --prepend CHANGELOG.md
+
+      - name: Commit and create PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore: release"
+          branch: release/auto
+          title: "chore: release"
+          body: |
+            Automated release PR.
+
+            - Versions bumped (${{ steps.bump.outputs.level }})
+            - CHANGELOG.md updated
+          labels: release
+          delete-branch: true

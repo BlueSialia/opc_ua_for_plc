@@ -56,30 +56,48 @@ All CI workflows live in `.github/workflows/`. They use standard Rust tooling �
 
 ### `release.yml` — Release orchestration
 
-**Trigger:** push to `main`.
+**Trigger:** push to `main` (unless the commit is a release merge).
 
-Runs [release-plz](https://release-plz.ieni.dev/) which:
+| Step | Tool | What it does |
+|---|---|---|
+| Determine bump | `git cliff --bump` | Analyzes Conventional Commits since the last git tag to determine the next semver bump level (major/minor/patch). |
+| Bump versions | `cargo set-version --workspace` | Bumps the version of all workspace crates by the determined level. |
+| Update changelog | `git cliff --prepend` | Generates changelog entries from unreleased commits and prepends them to `CHANGELOG.md`. |
+| Create PR | `peter-evans/create-pull-request` | Creates or updates a PR on branch `release/auto` with the version bumps and changelog changes. |
 
-1. Reads commit messages since the last tag (using Conventional Commits).
-2. Determines the next semantic version bump.
-3. Creates or updates a release PR with `CHANGELOG.md` updates and crate version bumps.
-4. When that PR is merged, release-plz creates a git tag and a GitHub release.
+The PR is created with the commit message `chore: release`. When merged, it triggers the tag workflow.
 
-Configured via `release-plz.toml`. All crates share a single root `CHANGELOG.md`.
+### `release-tag.yml` — Git tag and GitHub release
+
+**Trigger:** push to `main` with commit message starting with `chore: release`.
+
+| Step | Tool | What it does |
+|---|---|---|
+| Read version | `cargo metadata` | Reads the version from the `runtime` crate's `Cargo.toml`. |
+| Create tag | `git tag` | Creates an annotated tag (`v{version}`) and pushes it. |
+| Create release | `gh release create` | Creates a GitHub release with the changelog contents. |
 
 ### `release-binary.yml` — Binary attachment
 
 **Trigger:** GitHub release published.
 
-| Job | Tool | What it does |
+| Step | Tool | What it does |
 |---|---|---|
 | Build & upload | `cargo build --release`, `action-gh-release` | Builds the `runtime` binary and attaches it to the GitHub release. |
+
+### Release flow summary
+
+```
+Push to main (feat/fix commits) → release.yml creates release PR
+Merge release PR ("chore: release") → release-tag.yml creates git tag + GitHub release
+Release published → release-binary.yml builds & attaches binary
+```
 
 ## Configuration files
 
 | File | Purpose |
 |---|---|
 | `deny.toml` | cargo-deny configuration: allowed licenses, advisory policy, duplicate crate bans. |
-| `release-plz.toml` | release-plz configuration: workspace layout, changelog paths, git-only releases. |
+| `cliff.toml` | git-cliff configuration: changelog format, commit parsers, tag pattern. |
 | `.githooks/commit-msg` | Shell script enforcing Conventional Commits locally. |
 | `setup-hooks.sh` | One-time script to enable git hooks via `core.hooksPath`. |
