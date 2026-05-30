@@ -39,7 +39,7 @@ jobs:
           cat baseline.json
 
       - name: Save baseline to cache
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@v5
         with:
           path: baseline.json
           key: binary-baseline-${{ github.run_id }}
