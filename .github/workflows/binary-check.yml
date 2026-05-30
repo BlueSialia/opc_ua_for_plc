@@ -56,7 +56,6 @@ jobs:
           SIZE_THRESHOLD=10
           TIME_THRESHOLD=20
 
-          # --- Binary size comparison ---
           for bin in $(jq -r '.binaries | keys[]' pr-sizes.json); do
             pr_size=$(jq -r ".binaries[\"$bin\"]" pr-sizes.json)
             base_size=$(jq -r ".binaries[\"$bin\"] // 0" baseline.json)
@@ -83,7 +82,6 @@ jobs:
             fi
           done
 
-          # --- Compilation time comparison ---
           pr_time=$(cat compile-time.txt)
           base_time=$(jq -r '.compile_time_real // 0' baseline.json)
 
@@ -114,5 +112,5 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: thollander/actions-comment-pull-request@v3
         with:
-          filePath: bloat-report.md
-          comment_tag: binary-check
+          file-path: bloat-report.md
+          comment-tag: binary-check
