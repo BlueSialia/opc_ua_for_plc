@@ -65,7 +65,7 @@ Runs [release-plz](https://release-plz.ieni.dev/) which:
 3. Creates or updates a release PR with `CHANGELOG.md` updates and crate version bumps.
 4. When that PR is merged, release-plz creates a git tag and a GitHub release.
 
-Configured via `release-plz.toml`. All crates share a single root `CHANGELOG.md`. Crates are not published to crates.io (`git_only = true`).
+Configured via `release-plz.toml`. All crates share a single root `CHANGELOG.md`.
 
 ### `release-binary.yml` — Binary attachment
 

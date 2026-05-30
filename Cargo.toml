@@ -13,6 +13,14 @@ members = [
 # Enable the new feature resolver for more flexible dependency resolution
 resolver = "2"
 
+[workspace.dependencies]
+core-model = { version = "0.1.0", path = "core-model" }
+driver-common = { version = "0.1.0", path = "driver/common" }
+driver-fins = { version = "0.1.0", path = "driver/fins" }
+driver-modbus = { version = "0.1.0", path = "driver/modbus" }
+opcua-server = { version = "0.1.0", path = "opcua-server" }
+runtime = { version = "0.1.0", path = "runtime" }
+
 [workspace.metadata]
 description = "OPC UA server for PLCs with protocol drivers and a unified core model."
 license = "Hippocratic License 3.0"

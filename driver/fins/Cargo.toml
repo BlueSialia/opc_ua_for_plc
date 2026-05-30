@@ -16,13 +16,10 @@ path = "src/lib.rs"
 
 [dependencies]
 # Core internal model (workspace member)
-core-model = { version = "0.1.0", path = "../../core-model" }
+core-model.workspace = true
 
 # Shared driver trait crate (common utilities for all drivers)
-# Use an explicit crate alias so consumers import `driver_common` while the
-# package is named `driver-common` in the workspace. This avoids hyphen/underscore
-# name inconveniences when using `use` in Rust code.
-driver_common = { package = "driver-common", version = "0.1.0", path = "../common" }
+driver-common.workspace = true
 
 # Async runtime for TCP and scheduling
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "io-util", "sync"] }
